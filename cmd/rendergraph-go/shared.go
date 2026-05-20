@@ -152,6 +152,16 @@ func spinnerDemo() *app.App {
 				},
 			})
 
+			sky, err := render.NewSkyPass(renderer.Device, renderer.SurfaceFormat, renderer.AspectRatio)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := renderer.Graph.AddPass(sky, []render.SlotBinding{
+				{Slot: "color", ResourceID: renderer.SceneColorID},
+			}); err != nil {
+				log.Fatal(err)
+			}
+
 			mesh, err := render.NewMeshPass(renderer.Device, renderer.SurfaceFormat, renderer.AspectRatio)
 			if err != nil {
 				log.Fatal(err)
