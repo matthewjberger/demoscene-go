@@ -5,6 +5,8 @@ import "unsafe"
 // IterChanged1 yields every entity whose component A was stamped after the
 // previous frame's watermark. Useful for "redraw only what moved" systems.
 func IterChanged1[A any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	since := world.lastTick
 	include := extraInclude | aInfo.mask
@@ -31,6 +33,8 @@ func IterChanged1[A any](world *World, extraInclude, exclude Mask, callback func
 // The OR semantics match the freecs Rust kernel: "iterate anything whose
 // visual representation moved" is the typical use case.
 func IterChanged2[A, B any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	since := world.lastTick
@@ -59,6 +63,8 @@ func IterChanged2[A, B any](world *World, extraInclude, exclude Mask, callback f
 // IterChanged3 yields entities whose A, B, or C was stamped after the
 // watermark. OR semantics across columns, same as IterChanged2.
 func IterChanged3[A, B, C any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)
@@ -92,6 +98,8 @@ func IterChanged3[A, B, C any](world *World, extraInclude, exclude Mask, callbac
 // IterChanged4 yields entities whose A, B, C, or D was stamped after the
 // watermark.
 func IterChanged4[A, B, C, D any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)
@@ -129,6 +137,8 @@ func IterChanged4[A, B, C, D any](world *World, extraInclude, exclude Mask, call
 // IterChanged5 yields entities whose A, B, C, D, or E was stamped
 // after the watermark.
 func IterChanged5[A, B, C, D, E any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)
@@ -170,6 +180,8 @@ func IterChanged5[A, B, C, D, E any](world *World, extraInclude, exclude Mask, c
 // IterChanged6 yields entities whose A, B, C, D, E, or F was stamped
 // after the watermark.
 func IterChanged6[A, B, C, D, E, F any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E, f *F)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)

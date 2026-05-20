@@ -68,6 +68,8 @@ func (w *World) CountQuery(include, exclude Mask) int {
 // slice aliasing freed or reordered memory. Use the command buffer
 // (QueueDespawn, QueueSet, etc.) to defer structural changes safely.
 func (w *World) ForEach(include, exclude Mask, callback func(entity Entity, table *Archetype, index int)) {
+	w.enterIter()
+	defer w.leaveIter()
 	for _, tableIndex := range w.cachedTables(include) {
 		table := w.tables[tableIndex]
 		if table.Mask&exclude != 0 {
@@ -104,6 +106,8 @@ func MarkChanged[T any](world *World, entity Entity) {
 // not Spawn, Despawn, Add, Remove, or Set a missing component from inside
 // the callback. Defer those via the command buffer.
 func Iter1[A any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	include := extraInclude | aInfo.mask
 	for _, tableIndex := range world.cachedTables(include) {
@@ -124,6 +128,8 @@ func Iter1[A any](world *World, extraInclude, exclude Mask, callback func(entity
 
 // Iter2 walks entities that have both A and B.
 func Iter2[A, B any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	include := extraInclude | aInfo.mask | bInfo.mask
@@ -146,6 +152,8 @@ func Iter2[A, B any](world *World, extraInclude, exclude Mask, callback func(ent
 
 // Iter3 walks entities that have A, B, and C.
 func Iter3[A, B, C any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)
@@ -170,6 +178,8 @@ func Iter3[A, B, C any](world *World, extraInclude, exclude Mask, callback func(
 
 // Iter4 walks entities that have A, B, C, and D.
 func Iter4[A, B, C, D any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)
@@ -196,6 +206,8 @@ func Iter4[A, B, C, D any](world *World, extraInclude, exclude Mask, callback fu
 
 // Iter5 walks entities that have A, B, C, D, and E.
 func Iter5[A, B, C, D, E any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)
@@ -224,6 +236,8 @@ func Iter5[A, B, C, D, E any](world *World, extraInclude, exclude Mask, callback
 
 // Iter6 walks entities that have A, B, C, D, E, and F.
 func Iter6[A, B, C, D, E, F any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E, f *F)) {
+	world.enterIter()
+	defer world.leaveIter()
 	aInfo := mustComponentInfo[A](world)
 	bInfo := mustComponentInfo[B](world)
 	cInfo := mustComponentInfo[C](world)

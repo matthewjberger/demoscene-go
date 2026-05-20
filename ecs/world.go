@@ -26,6 +26,20 @@ type World struct {
 	tagSets       map[reflect.Type]map[Entity]struct{}
 	commandBuffer []func(*World)
 	resources     map[reflect.Type]any
+	iterDepth     int
+}
+
+// enterIter / leaveIter bracket the iter-style helpers so the world
+// can detect structural mutations attempted from inside a callback.
+// Spawn / Despawn / Add / Remove panic while iterDepth > 0; defer
+// those via the command buffer (QueueSpawn, QueueDespawn, ...).
+func (w *World) enterIter() { w.iterDepth++ }
+func (w *World) leaveIter() { w.iterDepth-- }
+
+func (w *World) guardStructuralMutation(op string) {
+	if w.iterDepth > 0 {
+		panic("freecs: " + op + " called during Iter/ForEach; defer via the command buffer (Queue* helpers)")
+	}
 }
 
 // New creates an empty world. Components must be registered with

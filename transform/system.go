@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"log"
 	"sort"
 
 	"indigo/ecs"
@@ -15,33 +16,49 @@ const MaxHierarchyDepth = 256
 // Stored as a resource on the world; the system resets the slices to
 // length zero (preserving capacity).
 type PropagationState struct {
-	Dirty  []ecs.Entity
-	Depths []int
-	Order  []int
+	Dirty    []ecs.Entity
+	Depths   []int
+	Order    []int
+	Children map[ecs.Entity][]ecs.Entity
+	Seen     map[ecs.Entity]struct{}
+	Queue    []ecs.Entity
+
+	depthCapReported bool
 }
 
 // NewPropagationState returns an empty propagation scratch.
 func NewPropagationState() PropagationState {
-	return PropagationState{}
+	return PropagationState{
+		Children: make(map[ecs.Entity][]ecs.Entity, 16),
+		Seen:     make(map[ecs.Entity]struct{}, 16),
+	}
 }
 
 // UpdateGlobalTransforms is the per-frame transform propagation
-// system. Walks every entity marked [LocalTransformDirty], orders
-// them shallow-first by parent-chain depth, and rewrites each one's
-// [GlobalTransform] from its parent's GlobalTransform plus its own
-// LocalTransform.
+// system. Collects every entity marked [LocalTransformDirty],
+// cascades the dirty set to include every descendant via the Parent
+// chain (so moving a parent recomputes its children's globals),
+// orders the result shallow-first by parent-chain depth, and
+// rewrites each one's [GlobalTransform] from its parent's
+// GlobalTransform plus its own LocalTransform.
 //
-// Because dirty entities are processed roots-down, by the time a
-// child is touched its parent's GlobalTransform is either the value
-// from the previous frame (parent not dirty this frame, still
-// correct) or already rewritten this frame (parent dirty, processed
-// at a shallower depth). One matrix multiply per dirty entity, with
-// no recursive ancestor walk per entity.
+// Cascade is per-frame: we build a children index from a single
+// ForEach over Parent components, then BFS-expand the initial dirty
+// set. This keeps [MarkDirty] cheap (it doesn't need to know about
+// children) and tolerates Parent re-parenting without a separately-
+// maintained cache.
 func UpdateGlobalTransforms(world *ecs.World) {
 	scratch := ecs.Resource[PropagationState](world)
 	scratch.Dirty = scratch.Dirty[:0]
 	scratch.Depths = scratch.Depths[:0]
 	scratch.Order = scratch.Order[:0]
+	scratch.Queue = scratch.Queue[:0]
+	for k := range scratch.Children {
+		delete(scratch.Children, k)
+	}
+	for k := range scratch.Seen {
+		delete(scratch.Seen, k)
+	}
 
 	localMask := ecs.MaskOf[LocalTransform](world)
 	globalMask := ecs.MaskOf[GlobalTransform](world)
@@ -49,14 +66,44 @@ func UpdateGlobalTransforms(world *ecs.World) {
 
 	world.ForEach(localMask|globalMask|dirtyMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
 		scratch.Dirty = append(scratch.Dirty, entity)
+		scratch.Seen[entity] = struct{}{}
 	})
 
 	if len(scratch.Dirty) == 0 {
 		return
 	}
 
+	parentMask := ecs.MaskOf[Parent](world)
+	world.ForEach(parentMask, 0, func(entity ecs.Entity, table *ecs.Archetype, index int) {
+		parents, _ := ecs.Column[Parent](world, table)
+		p := &parents[index]
+		if p.IsRoot {
+			return
+		}
+		scratch.Children[p.Entity] = append(scratch.Children[p.Entity], entity)
+	})
+
+	scratch.Queue = append(scratch.Queue, scratch.Dirty...)
+	for len(scratch.Queue) > 0 {
+		current := scratch.Queue[0]
+		scratch.Queue = scratch.Queue[1:]
+		for _, child := range scratch.Children[current] {
+			if _, ok := scratch.Seen[child]; ok {
+				continue
+			}
+			scratch.Seen[child] = struct{}{}
+			scratch.Dirty = append(scratch.Dirty, child)
+			scratch.Queue = append(scratch.Queue, child)
+		}
+	}
+
 	for _, entity := range scratch.Dirty {
-		scratch.Depths = append(scratch.Depths, depthOf(world, entity))
+		depth := depthOf(world, entity)
+		scratch.Depths = append(scratch.Depths, depth)
+		if depth > MaxHierarchyDepth && !scratch.depthCapReported {
+			log.Printf("transform: hierarchy depth exceeded MaxHierarchyDepth=%d for entity %v; treating as disconnected", MaxHierarchyDepth, entity)
+			scratch.depthCapReported = true
+		}
 	}
 
 	for index := range scratch.Dirty {

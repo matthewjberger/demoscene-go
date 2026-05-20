@@ -318,13 +318,14 @@ const EntityIdFormat = wgpu.TextureFormatR32Uint
 
 // meshPrepare runs every frame:
 //  1. Write the camera's view × projection into the uniform.
-//  2. Free slots whose entities were despawned (driven by the world's
-//     [ecs.EntityDespawned] events; events stay readable for two frames,
-//     so the pass need only run at least once per pair of frames to
-//     avoid stale slots).
+//  2. Drain EntityDespawned events to free per-handle slots. The
+//     events are consumed (not just read) so a despawn cannot leak
+//     a slot if the mesh pass skips a frame for any reason.
 //  3. Allocate slots for entities whose RenderMesh was stamped this
-//     tick (new entities, or entities switching mesh handles). Driven
-//     by [ecs.IterChanged1] over RenderMesh so there is no per-frame
+//     tick: brand-new entities get fresh slots, and entities whose
+//     RenderMesh.Mesh handle changed get released from their old
+//     bucket and re-slotted in the new one. Driven by
+//     [ecs.IterChanged1] over RenderMesh so there is no per-frame
 //     scan over every visible entity.
 //  4. Sparse-upload only the entities whose GlobalTransform was
 //     stamped this tick.
@@ -339,7 +340,7 @@ func meshPrepare(s any, context *PassContext) error {
 	lights := extractLights(context.World)
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.lightsBuffer, 0, bytesOf(&lights))
 
-	for _, event := range ecs.ReadEvents[ecs.EntityDespawned](context.World) {
+	for _, event := range ecs.DrainEvents[ecs.EntityDespawned](context.World) {
 		releaseEntitySlot(state, context, event.Entity)
 	}
 
@@ -351,8 +352,11 @@ func meshPrepare(s any, context *PassContext) error {
 		globalMask,
 		0,
 		func(entity ecs.Entity, mesh *RenderMesh) {
-			if _, already := state.entityHandle[entity]; already {
-				return
+			if existing, already := state.entityHandle[entity]; already {
+				if existing == mesh.Mesh {
+					return
+				}
+				releaseEntitySlot(state, context, entity)
 			}
 			global, ok := ecs.Get[transform.GlobalTransform](context.World, entity)
 			if !ok {
