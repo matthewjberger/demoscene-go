@@ -162,7 +162,7 @@ func skyPrepare(s any, context *PassContext) error {
 		CamPos:  [4]float32{camera.Eye[0], camera.Eye[1], camera.Eye[2], 1.0},
 		Time:    0.0,
 	}
-	context.Queue.WriteBuffer(state.uniformBuffer, 0, bytesOf(&uniform))
+	writeBuffer(context.Device, context.Queue, context.Encoder, state.uniformBuffer, 0, bytesOf(&uniform))
 	return nil
 }
 

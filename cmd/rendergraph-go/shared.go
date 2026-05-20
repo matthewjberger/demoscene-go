@@ -117,11 +117,15 @@ func buildWorlds(renderer *render.Renderer) (Worlds, *app.App) {
 	return worlds, demo
 }
 
-// tickFrame advances both worlds by delta. Updates window timing,
-// runs the game schedule (writes to engine via the sync API), runs
-// the engine schedule (pan-orbit camera then transform propagation),
-// runs the demo's optional hooks, advances command + event queues on
-// both worlds, then clears per-frame input deltas.
+// tickFrame runs the per-frame pre-render work: stamp window timing,
+// run the game schedule (writes to engine via the sync API), run the
+// engine schedule (pan-orbit camera then transform propagation), run
+// the demo's optional hooks, and apply any deferred ECS commands.
+//
+// World.Step is deliberately NOT called here. Step bumps lastTick
+// past the just-stamped changes; if it ran before RenderFrame, the
+// mesh pass's IterChanged would see no changes. Call [postFrame]
+// AFTER the renderer has consumed this frame's stamps.
 func tickFrame(worlds Worlds, demo *app.App, delta float32) {
 	window.Advance(&ecs.Resource[window.Window](worlds.Engine).Timing, delta)
 	window.Advance(&ecs.Resource[window.Window](worlds.Game).Timing, delta)
@@ -137,10 +141,15 @@ func tickFrame(worlds Worlds, demo *app.App, delta float32) {
 	}
 
 	worlds.Engine.ApplyCommands()
-	worlds.Engine.Step()
 	worlds.Game.ApplyCommands()
-	worlds.Game.Step()
+}
 
+// postFrame finalizes the frame after the renderer has run: advance
+// each world's tick (rolls event queues, ages change-detection
+// watermarks) and clear the per-frame input deltas.
+func postFrame(worlds Worlds) {
+	worlds.Engine.Step()
+	worlds.Game.Step()
 	ecs.Resource[render.Input](worlds.Engine).BeginFrame()
 }
 

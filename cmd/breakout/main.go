@@ -1,8 +1,8 @@
 //go:build !js
 
-// Command rendergraph-go is the engine demo entry point: a grid of spinning
-// triangles driven by a dual-world ECS through the engine's render
-// graph, viewed through a pan-orbit camera.
+// Command breakout is the engine's breakout-clone demo: a paddle, a
+// ball, and a wall of cubes rendered as 3D primitives through the
+// engine's render graph.
 package main
 
 import (
@@ -17,7 +17,6 @@ import (
 
 	"rendergraph-go/ecs"
 	"rendergraph-go/render"
-	"rendergraph-go/transform"
 	"rendergraph-go/window"
 )
 
@@ -34,7 +33,7 @@ func main() {
 	defer glfw.Terminate()
 
 	glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
-	glfwWindow, err := glfw.CreateWindow(1280, 720, "rendergraph-go", nil, nil)
+	glfwWindow, err := glfw.CreateWindow(1280, 720, "breakout", nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -77,6 +76,7 @@ func main() {
 		last = now
 
 		tickFrame(worlds, demo, delta)
+		glfwWindow.SetTitle(titleForState(ecs.Resource[GameState](worlds.Game)))
 
 		switch err := renderer.RenderFrame(worlds.Engine); {
 		case err == nil:
@@ -90,22 +90,15 @@ func main() {
 	}
 }
 
-// installInputCallbacks wires GLFW's cursor / mouse-button / scroll
-// callbacks to accumulate frame deltas into the engine world's Input
-// resource. tickFrame zeroes the deltas at the end of each frame.
+// installInputCallbacks wires the GLFW cursor / mouse-button / scroll
+// callbacks onto the engine world's Input resource, plus keyboard
+// down/up for held A/D paddle motion, edge-triggered space (launch),
+// and R (reset).
 func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
-	var previousMouse transform.Vec2
-	var haveMouse bool
-
 	glfwWindow.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
 		input := ecs.Resource[render.Input](engine)
-		current := transform.Vec2{float32(x), float32(y)}
-		if haveMouse {
-			input.MouseDelta = input.MouseDelta.Add(current.Sub(previousMouse))
-		}
-		input.MousePosition = current
-		previousMouse = current
-		haveMouse = true
+		input.MousePosition[0] = float32(x)
+		input.MousePosition[1] = float32(y)
 	})
 
 	glfwWindow.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, _ glfw.ModifierKey) {
@@ -145,16 +138,14 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	})
 }
 
-// glfwKeyRune maps a subset of GLFW key codes to the uppercase ASCII
-// runes the Input resource expects: A-Z, space, and digits.
+// glfwKeyRune maps the breakout-relevant subset of GLFW key codes to
+// the uppercase ASCII runes the Input resource expects.
 func glfwKeyRune(key glfw.Key) (rune, bool) {
 	switch {
 	case key >= glfw.KeyA && key <= glfw.KeyZ:
 		return rune(key), true
 	case key == glfw.KeySpace:
 		return ' ', true
-	case key >= glfw.Key0 && key <= glfw.Key9:
-		return rune(key), true
 	}
 	return 0, false
 }

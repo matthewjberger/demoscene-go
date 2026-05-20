@@ -18,13 +18,16 @@ jobs:
         with:
           go-version: stable
 
-      - name: Build wasm bundle
+      - name: Build wasm bundles
         env:
           GOOS: js
           GOARCH: wasm
         run: |
-          go build -o site/main.wasm ./cmd/rendergraph-go
-          cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/wasm_exec.js
+          mkdir -p site/rendergraph-go site/breakout
+          go build -o site/rendergraph-go/main.wasm ./cmd/rendergraph-go
+          go build -o site/breakout/main.wasm ./cmd/breakout
+          cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/rendergraph-go/wasm_exec.js
+          cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/breakout/wasm_exec.js
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4

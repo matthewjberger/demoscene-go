@@ -303,10 +303,10 @@ func meshPrepare(s any, context *PassContext) error {
 
 	camera := ecs.Resource[Camera](context.World)
 	viewProjection := camera.ViewProjection(state.aspectFn())
-	context.Queue.WriteBuffer(state.viewProjBuffer, 0, bytesOf(&viewProjection))
+	writeBuffer(context.Device, context.Queue, context.Encoder, state.viewProjBuffer, 0, bytesOf(&viewProjection))
 
 	lights := extractLights(context.World)
-	context.Queue.WriteBuffer(state.lightsBuffer, 0, bytesOf(&lights))
+	writeBuffer(context.Device, context.Queue, context.Encoder, state.lightsBuffer, 0, bytesOf(&lights))
 
 	for _, event := range ecs.ReadEvents[ecs.EntityDespawned](context.World) {
 		releaseEntitySlot(state, context, event.Entity)
@@ -339,7 +339,7 @@ func meshPrepare(s any, context *PassContext) error {
 			return
 		}
 		matrix := globals[index].Matrix
-		context.Queue.WriteBuffer(bucket.buffer, uint64(slot)*matrixSize, bytesOf(&matrix))
+		writeBuffer(context.Device, context.Queue, context.Encoder, bucket.buffer, uint64(slot)*matrixSize, bytesOf(&matrix))
 	})
 
 	ecs.IterChanged1[transform.GlobalTransform](
@@ -359,7 +359,7 @@ func meshPrepare(s any, context *PassContext) error {
 			if !ok {
 				return
 			}
-			context.Queue.WriteBuffer(bucket.buffer, uint64(slot)*matrixSize, bytesOf(&global.Matrix))
+			writeBuffer(context.Device, context.Queue, context.Encoder, bucket.buffer, uint64(slot)*matrixSize, bytesOf(&global.Matrix))
 		},
 	)
 
@@ -506,7 +506,7 @@ func releaseEntitySlot(state *meshPassState, context *PassContext, entity ecs.En
 		bucket.slotEntity[slot] = moved
 		bucket.entityToSlot[moved] = slot
 		if global, ok := ecs.Get[transform.GlobalTransform](context.World, moved); ok {
-			context.Queue.WriteBuffer(bucket.buffer, uint64(slot)*matrixSize, bytesOf(&global.Matrix))
+			writeBuffer(context.Device, context.Queue, context.Encoder, bucket.buffer, uint64(slot)*matrixSize, bytesOf(&global.Matrix))
 		}
 	}
 	bucket.slotEntity = bucket.slotEntity[:last]

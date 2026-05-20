@@ -10,7 +10,6 @@ import (
 
 	"rendergraph-go/ecs"
 	"rendergraph-go/render"
-	"rendergraph-go/transform"
 	"rendergraph-go/window"
 )
 
@@ -74,6 +73,8 @@ func main() {
 	resizeObserver := js.Global().Get("ResizeObserver").New(resizeFunc)
 	resizeObserver.Call("observe", canvas)
 
+	titleEl := doc.Call("getElementById", "title")
+
 	last := time.Now()
 	var frame js.Func
 	frame = js.FuncOf(func(_ js.Value, _ []js.Value) any {
@@ -82,6 +83,11 @@ func main() {
 		last = now
 
 		tickFrame(worlds, demo, delta)
+		title := titleForState(ecs.Resource[GameState](worlds.Game))
+		if titleEl.Truthy() {
+			titleEl.Set("textContent", title)
+		}
+		doc.Set("title", title)
 
 		if err := renderer.RenderFrame(worlds.Engine); err != nil {
 			js.Global().Get("console").Call("error", "render error: "+err.Error())
@@ -97,57 +103,7 @@ func main() {
 	select {}
 }
 
-// installCanvasInputListeners attaches DOM pointer / wheel handlers to
-// the canvas. Each handler accumulates into the engine world's Input
-// resource; tickFrame consumes the snapshot and clears per-frame
-// deltas. The js.Funcs are intentionally never released because main
-// never returns.
 func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
-	canvas.Call("addEventListener", "mousemove", js.FuncOf(func(_ js.Value, args []js.Value) any {
-		if len(args) == 0 {
-			return nil
-		}
-		event := args[0]
-		input := ecs.Resource[render.Input](engine)
-		x := float32(event.Get("offsetX").Float())
-		y := float32(event.Get("offsetY").Float())
-		dx := float32(event.Get("movementX").Float())
-		dy := float32(event.Get("movementY").Float())
-		input.MousePosition = transform.Vec2{x, y}
-		input.MouseDelta = input.MouseDelta.Add(transform.Vec2{dx, dy})
-		return nil
-	}))
-
-	canvas.Call("addEventListener", "mousedown", js.FuncOf(func(_ js.Value, args []js.Value) any {
-		if len(args) == 0 {
-			return nil
-		}
-		event := args[0]
-		setMouseButton(engine, event.Get("button").Int(), true)
-		return nil
-	}))
-
-	canvas.Call("addEventListener", "mouseup", js.FuncOf(func(_ js.Value, args []js.Value) any {
-		if len(args) == 0 {
-			return nil
-		}
-		event := args[0]
-		setMouseButton(engine, event.Get("button").Int(), false)
-		return nil
-	}))
-
-	canvas.Call("addEventListener", "wheel", js.FuncOf(func(_ js.Value, args []js.Value) any {
-		if len(args) == 0 {
-			return nil
-		}
-		event := args[0]
-		event.Call("preventDefault")
-		input := ecs.Resource[render.Input](engine)
-		deltaY := float32(event.Get("deltaY").Float())
-		input.Wheel -= deltaY * 0.01
-		return nil
-	}), map[string]any{"passive": false})
-
 	canvas.Call("addEventListener", "contextmenu", js.FuncOf(func(_ js.Value, args []js.Value) any {
 		if len(args) > 0 {
 			args[0].Call("preventDefault")
@@ -182,8 +138,6 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 	}))
 }
 
-// domKeyRune maps a DOM KeyboardEvent to the uppercase ASCII runes
-// the Input resource tracks: A-Z, space, digits.
 func domKeyRune(event js.Value) (rune, bool) {
 	key := event.Get("key").String()
 	if key == " " {
@@ -196,23 +150,8 @@ func domKeyRune(event js.Value) (rune, bool) {
 	if r >= 'a' && r <= 'z' {
 		r -= 'a' - 'A'
 	}
-	switch {
-	case r >= 'A' && r <= 'Z':
-		return r, true
-	case r >= '0' && r <= '9':
+	if r >= 'A' && r <= 'Z' {
 		return r, true
 	}
 	return 0, false
-}
-
-func setMouseButton(engine *ecs.World, button int, pressed bool) {
-	input := ecs.Resource[render.Input](engine)
-	switch button {
-	case 0:
-		input.LeftDown = pressed
-	case 1:
-		input.MiddleDown = pressed
-	case 2:
-		input.RightDown = pressed
-	}
 }

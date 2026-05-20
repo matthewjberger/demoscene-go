@@ -1,5 +1,7 @@
 /rendergraph-go.exe
 /rendergraph-go
+/breakout.exe
+/breakout
 *.log
-site/main.wasm
-site/wasm_exec.js
+site/*/main.wasm
+site/*/wasm_exec.js

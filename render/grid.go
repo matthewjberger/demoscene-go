@@ -183,7 +183,7 @@ func gridPrepare(s any, context *PassContext) error {
 		GridMinPixels: 2.0,
 		GridCellSize:  0.025,
 	}
-	context.Queue.WriteBuffer(state.uniformBuffer, 0, bytesOf(&uniform))
+	writeBuffer(context.Device, context.Queue, context.Encoder, state.uniformBuffer, 0, bytesOf(&uniform))
 	return nil
 }
 

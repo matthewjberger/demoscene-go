@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>breakout</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    color: #ddd;
+    font-family: system-ui, sans-serif;
+  }
+  body { display: flex; flex-direction: column; }
+  #status {
+    padding: 8px 12px;
+    font-size: 13px;
+    display: none;
+  }
+  #status.visible { display: block; }
+  #canvas {
+    flex: 1 1 auto;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  a { color: #ffb86c; }
+</style>
+</head>
+<body>
+<div id="status"></div>
+<canvas id="canvas" width="1280" height="720"></canvas>
+
+<script src="wasm_exec.js"></script>
+<script>
+  const status = document.getElementById('status');
+  const showStatus = (msg) => {
+    status.textContent = msg;
+    status.classList.add('visible');
+  };
+
+  if (!navigator.gpu) {
+    showStatus('WebGPU is not available in this browser. Try the latest Chrome, Edge, or Safari 26+.');
+  } else {
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch('main.wasm'), go.importObject)
+      .then((result) => {
+        window.wasm = result;
+        go.run(result.instance);
+      })
+      .catch((err) => {
+        showStatus('Failed to load wasm: ' + err);
+        console.error(err);
+      });
+  }
+</script>
+</body>
+</html>

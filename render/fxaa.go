@@ -177,7 +177,7 @@ func fxaaPrepare(s any, context *PassContext) error {
 		Enabled:         enabled,
 		SubpixelQuality: 0.75,
 	}
-	context.Queue.WriteBuffer(state.paramsBuffer, 0, bytesOf(&params))
+	writeBuffer(context.Device, context.Queue, context.Encoder, state.paramsBuffer, 0, bytesOf(&params))
 	return nil
 }
 

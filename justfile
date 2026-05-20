@@ -4,32 +4,35 @@ set windows-shell := ["powershell.exe"]
 @just:
     just --list
 
-# Runs the desktop app
-run:
-    go run ./cmd/rendergraph-go
+# Runs the named app (default: rendergraph-go). Example: `just run breakout`.
+run $project="rendergraph-go":
+    go run ./cmd/{{project}}
 
-# Builds the desktop binary
-build:
-    go build ./cmd/rendergraph-go
+# Builds the named app's desktop binary.
+build $project="rendergraph-go":
+    go build ./cmd/{{project}}
 
-# Builds the wasm bundle into site/ (Windows)
+# Builds the named app's wasm bundle into site/<project>/ (Windows).
 [windows]
-build-wasm:
-    $env:GOOS = "js"; $env:GOARCH = "wasm"; go build -o site/main.wasm ./cmd/rendergraph-go
-    Copy-Item "$((go env GOROOT))/lib/wasm/wasm_exec.js" site/wasm_exec.js
+build-wasm $project="rendergraph-go":
+    New-Item -ItemType Directory -Force -Path site/{{project}} | Out-Null
+    $env:GOOS = "js"; $env:GOARCH = "wasm"; go build -o site/{{project}}/main.wasm ./cmd/{{project}}
+    Copy-Item "$((go env GOROOT))/lib/wasm/wasm_exec.js" site/{{project}}/wasm_exec.js
 
-# Builds the wasm bundle into site/ (Unix)
+# Builds the named app's wasm bundle into site/<project>/ (Unix).
 [unix]
-build-wasm:
-    GOOS=js GOARCH=wasm go build -o site/main.wasm ./cmd/rendergraph-go
-    cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/wasm_exec.js
+build-wasm $project="rendergraph-go":
+    mkdir -p site/{{project}}
+    GOOS=js GOARCH=wasm go build -o site/{{project}}/main.wasm ./cmd/{{project}}
+    cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/{{project}}/wasm_exec.js
 
 # Serves site/ on http://localhost:8080
 serve:
     go run ./cmd/serve
 
-# Builds the wasm bundle and serves site/
-run-wasm: build-wasm serve
+# Builds the named app's wasm bundle and serves site/.
+run-wasm $project="rendergraph-go": (build-wasm project)
+    just serve
 
 # Runs go vet and fails on unformatted files (Windows)
 [windows]
@@ -75,15 +78,16 @@ doc:
     go doc -all ./render
     go doc -all ./app
 
-# Removes the desktop binary (Windows)
+# Removes any built binaries (Windows)
 [windows]
 clean:
     Remove-Item -Force -ErrorAction SilentlyContinue rendergraph-go.exe
+    Remove-Item -Force -ErrorAction SilentlyContinue breakout.exe
 
-# Removes the desktop binary (Unix)
+# Removes any built binaries (Unix)
 [unix]
 clean:
-    rm -f rendergraph-go rendergraph-go.exe
+    rm -f rendergraph-go rendergraph-go.exe breakout breakout.exe
 
 # Displays Go tool version
 @versions:
