@@ -17,6 +17,7 @@ import (
 	"rendergraph-go/ecs"
 	"rendergraph-go/render"
 	"rendergraph-go/transform"
+	"rendergraph-go/window"
 )
 
 // EngineRef is the game-world resource that points at the engine
@@ -62,7 +63,12 @@ func buildWorlds(renderer *render.Renderer) (Worlds, *app.App) {
 	ecs.Register[transform.LocalTransformDirty](engine)
 	ecs.Register[render.RenderMesh](engine)
 
-	ecs.SetResource(engine, render.DeltaTime(0))
+	ecs.SetResource(engine, window.Window{
+		Viewport: window.ViewportSize{
+			Width:  renderer.Config.Width,
+			Height: renderer.Config.Height,
+		},
+	})
 	ecs.SetResource(engine, render.RendererResource{Renderer: renderer})
 	ecs.SetResource(engine, render.DefaultCamera())
 	ecs.SetResource(engine, render.MeshAssetsResource{Assets: renderer.Meshes})
@@ -73,7 +79,7 @@ func buildWorlds(renderer *render.Renderer) (Worlds, *app.App) {
 	game := ecs.New()
 	ecs.Register[Spinner](game)
 	ecs.Register[app.EngineEntity](game)
-	ecs.SetResource(game, render.DeltaTime(0))
+	ecs.SetResource(game, window.Window{})
 	ecs.SetResource(game, EngineRef{World: engine})
 
 	engineSchedule := ecs.NewSchedule()
@@ -108,14 +114,14 @@ func buildWorlds(renderer *render.Renderer) (Worlds, *app.App) {
 	return worlds, demo
 }
 
-// tickFrame advances both worlds by delta. Stamps DeltaTime, runs the
-// game schedule (writes to engine via the sync API), runs the engine
-// schedule (pan-orbit camera then transform propagation), runs the
-// demo's optional hooks, advances command + event queues on both
-// worlds, then clears per-frame input deltas.
+// tickFrame advances both worlds by delta. Updates window timing,
+// runs the game schedule (writes to engine via the sync API), runs
+// the engine schedule (pan-orbit camera then transform propagation),
+// runs the demo's optional hooks, advances command + event queues on
+// both worlds, then clears per-frame input deltas.
 func tickFrame(worlds Worlds, demo *app.App, delta float32) {
-	*ecs.Resource[render.DeltaTime](worlds.Engine) = render.DeltaTime(delta)
-	*ecs.Resource[render.DeltaTime](worlds.Game) = render.DeltaTime(delta)
+	window.Advance(&ecs.Resource[window.Window](worlds.Engine).Timing, delta)
+	window.Advance(&ecs.Resource[window.Window](worlds.Game).Timing, delta)
 
 	worlds.GameSchedule.Run(worlds.Game)
 	worlds.EngineSchedule.Run(worlds.Engine)
@@ -264,7 +270,7 @@ func initializeWorldEntities(worlds Worlds, meshes []render.MeshHandle) {
 // state is the source of truth; reaching across into the engine world
 // goes through the named sync API.
 func advanceSpinners(game *ecs.World) {
-	delta := float32(*ecs.Resource[render.DeltaTime](game))
+	delta := ecs.Resource[window.Window](game).Timing.DeltaSeconds
 	engineRef := ecs.Resource[EngineRef](game)
 
 	spinnerMask := ecs.MaskOf[Spinner](game) | ecs.MaskOf[app.EngineEntity](game)

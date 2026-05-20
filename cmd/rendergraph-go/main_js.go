@@ -11,6 +11,7 @@ import (
 	"rendergraph-go/ecs"
 	"rendergraph-go/render"
 	"rendergraph-go/transform"
+	"rendergraph-go/window"
 )
 
 func main() {
@@ -63,6 +64,10 @@ func main() {
 		canvas.Set("height", h)
 		if err := renderer.Resize(w, h); err != nil {
 			js.Global().Get("console").Call("error", "resize failed: "+err.Error())
+		}
+		ecs.Resource[window.Window](worlds.Engine).Viewport = window.ViewportSize{
+			Width:  w,
+			Height: h,
 		}
 		return nil
 	})

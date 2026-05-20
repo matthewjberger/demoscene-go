@@ -7,6 +7,7 @@ import (
 
 	"rendergraph-go/ecs"
 	"rendergraph-go/transform"
+	"rendergraph-go/window"
 )
 
 // PanOrbitController is the data half of an arc-ball / pan-orbit
@@ -81,33 +82,27 @@ func DefaultPanOrbitController() PanOrbitController {
 // UpdatePanOrbitCamera consumes a frame of [Input] from the engine
 // world, advances the [PanOrbitController]'s target pose (orbit, pan,
 // zoom), smooths the current pose toward the target, and writes the
-// derived eye + target back to the [Camera] resource. Reads delta from
-// the [DeltaTime] resource so the system signature is (*World), the
-// shape an [ecs.Schedule] expects.
+// derived eye + target back to the [Camera] resource. Reads delta and
+// viewport from the [window.Window] resource so the system signature
+// is (*World), the shape an [ecs.Schedule] expects.
 func UpdatePanOrbitCamera(world *ecs.World) {
-	delta := float32(*ecs.Resource[DeltaTime](world))
+	w := ecs.Resource[window.Window](world)
 	controller := ecs.Resource[PanOrbitController](world)
 	camera := ecs.Resource[Camera](world)
 	input := ecs.Resource[Input](world)
-	renderer := ecs.Resource[RendererResource](world).Renderer
 
-	width, height := renderer.viewport()
+	width := float32(w.Viewport.Width)
+	height := float32(w.Viewport.Height)
 	if width <= 0 || height <= 0 {
 		return
 	}
 	viewport := transform.Vec2{width, height}
 	yFov := camera.FovYRadians
+	delta := w.Timing.DeltaSeconds
 
 	applyPanOrbitInput(controller, input, viewport, yFov)
 	applyPanOrbitSmoothing(controller, delta)
 	writePanOrbitCamera(controller, camera)
-}
-
-func (r *Renderer) viewport() (float32, float32) {
-	if r == nil || r.Config == nil {
-		return 0, 0
-	}
-	return float32(r.Config.Width), float32(r.Config.Height)
 }
 
 func applyPanOrbitInput(controller *PanOrbitController, input *Input, viewport transform.Vec2, yFov float32) {

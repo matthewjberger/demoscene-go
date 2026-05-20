@@ -18,6 +18,7 @@ import (
 	"rendergraph-go/ecs"
 	"rendergraph-go/render"
 	"rendergraph-go/transform"
+	"rendergraph-go/window"
 )
 
 func init() {
@@ -33,18 +34,18 @@ func main() {
 	defer glfw.Terminate()
 
 	glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
-	window, err := glfw.CreateWindow(1280, 720, "rendergraph-go", nil, nil)
+	glfwWindow, err := glfw.CreateWindow(1280, 720, "rendergraph-go", nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer window.Destroy()
+	defer glfwWindow.Destroy()
 
 	instance := wgpu.CreateInstance(nil)
 	defer instance.Release()
 
-	surface := instance.CreateSurface(wgpuglfw.GetSurfaceDescriptor(window))
+	surface := instance.CreateSurface(wgpuglfw.GetSurfaceDescriptor(glfwWindow))
 
-	width, height := window.GetSize()
+	width, height := glfwWindow.GetSize()
 	renderer, err := render.NewRenderer(instance, surface, uint32(width), uint32(height))
 	if err != nil {
 		log.Fatal(err)
@@ -52,18 +53,23 @@ func main() {
 	defer renderer.Release()
 
 	worlds, demo := buildWorlds(renderer)
-	installInputCallbacks(window, worlds.Engine)
+	installInputCallbacks(glfwWindow, worlds.Engine)
 
-	window.SetSizeCallback(func(_ *glfw.Window, w, h int) {
-		if w > 0 && h > 0 {
-			if err := renderer.Resize(uint32(w), uint32(h)); err != nil {
-				log.Printf("resize error: %v", err)
-			}
+	glfwWindow.SetSizeCallback(func(_ *glfw.Window, w, h int) {
+		if w <= 0 || h <= 0 {
+			return
+		}
+		if err := renderer.Resize(uint32(w), uint32(h)); err != nil {
+			log.Printf("resize error: %v", err)
+		}
+		ecs.Resource[window.Window](worlds.Engine).Viewport = window.ViewportSize{
+			Width:  uint32(w),
+			Height: uint32(h),
 		}
 	})
 
 	last := time.Now()
-	for !window.ShouldClose() {
+	for !glfwWindow.ShouldClose() {
 		glfw.PollEvents()
 
 		now := time.Now()
@@ -85,11 +91,11 @@ func main() {
 // installInputCallbacks wires GLFW's cursor / mouse-button / scroll
 // callbacks to accumulate frame deltas into the engine world's Input
 // resource. tickFrame zeroes the deltas at the end of each frame.
-func installInputCallbacks(window *glfw.Window, engine *ecs.World) {
+func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	var previousMouse transform.Vec2
 	var haveMouse bool
 
-	window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
+	glfwWindow.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
 		input := ecs.Resource[render.Input](engine)
 		current := transform.Vec2{float32(x), float32(y)}
 		if haveMouse {
@@ -100,7 +106,7 @@ func installInputCallbacks(window *glfw.Window, engine *ecs.World) {
 		haveMouse = true
 	})
 
-	window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, _ glfw.ModifierKey) {
+	glfwWindow.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, _ glfw.ModifierKey) {
 		input := ecs.Resource[render.Input](engine)
 		pressed := action == glfw.Press
 		switch button {
@@ -113,12 +119,12 @@ func installInputCallbacks(window *glfw.Window, engine *ecs.World) {
 		}
 	})
 
-	window.SetScrollCallback(func(_ *glfw.Window, _, yOffset float64) {
+	glfwWindow.SetScrollCallback(func(_ *glfw.Window, _, yOffset float64) {
 		input := ecs.Resource[render.Input](engine)
 		input.Wheel += float32(yOffset)
 	})
 
-	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, _ int, action glfw.Action, _ glfw.ModifierKey) {
+	glfwWindow.SetKeyCallback(func(w *glfw.Window, key glfw.Key, _ int, action glfw.Action, _ glfw.ModifierKey) {
 		if key == glfw.KeyEscape && action == glfw.Press {
 			w.SetShouldClose(true)
 		}
