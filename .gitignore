@@ -1,0 +1,5 @@
+/rendergraph-go.exe
+/rendergraph-go
+*.log
+site/main.wasm
+site/wasm_exec.js
