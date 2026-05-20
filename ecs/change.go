@@ -126,6 +126,92 @@ func IterChanged4[A, B, C, D any](world *World, extraInclude, exclude Mask, call
 	}
 }
 
+// IterChanged5 yields entities whose A, B, C, D, or E was stamped
+// after the watermark.
+func IterChanged5[A, B, C, D, E any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E)) {
+	aInfo := mustComponentInfo[A](world)
+	bInfo := mustComponentInfo[B](world)
+	cInfo := mustComponentInfo[C](world)
+	dInfo := mustComponentInfo[D](world)
+	eInfo := mustComponentInfo[E](world)
+	since := world.lastTick
+	include := extraInclude | aInfo.mask | bInfo.mask | cInfo.mask | dInfo.mask | eInfo.mask
+	for _, tableIndex := range world.cachedTables(include) {
+		table := world.tables[tableIndex]
+		if table.Mask&exclude != 0 {
+			continue
+		}
+		count := len(table.Entities)
+		if count == 0 {
+			continue
+		}
+		aColumn := table.columns[aInfo.bitIndex]
+		bColumn := table.columns[bInfo.bitIndex]
+		cColumn := table.columns[cInfo.bitIndex]
+		dColumn := table.columns[dInfo.bitIndex]
+		eColumn := table.columns[eInfo.bitIndex]
+		aSlice := unsafe.Slice((*A)(aColumn.dataPtr), count)
+		bSlice := unsafe.Slice((*B)(bColumn.dataPtr), count)
+		cSlice := unsafe.Slice((*C)(cColumn.dataPtr), count)
+		dSlice := unsafe.Slice((*D)(dColumn.dataPtr), count)
+		eSlice := unsafe.Slice((*E)(eColumn.dataPtr), count)
+		for arrayIndex := 0; arrayIndex < count; arrayIndex++ {
+			if aColumn.changed[arrayIndex] > since ||
+				bColumn.changed[arrayIndex] > since ||
+				cColumn.changed[arrayIndex] > since ||
+				dColumn.changed[arrayIndex] > since ||
+				eColumn.changed[arrayIndex] > since {
+				callback(table.Entities[arrayIndex], &aSlice[arrayIndex], &bSlice[arrayIndex], &cSlice[arrayIndex], &dSlice[arrayIndex], &eSlice[arrayIndex])
+			}
+		}
+	}
+}
+
+// IterChanged6 yields entities whose A, B, C, D, E, or F was stamped
+// after the watermark.
+func IterChanged6[A, B, C, D, E, F any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E, f *F)) {
+	aInfo := mustComponentInfo[A](world)
+	bInfo := mustComponentInfo[B](world)
+	cInfo := mustComponentInfo[C](world)
+	dInfo := mustComponentInfo[D](world)
+	eInfo := mustComponentInfo[E](world)
+	fInfo := mustComponentInfo[F](world)
+	since := world.lastTick
+	include := extraInclude | aInfo.mask | bInfo.mask | cInfo.mask | dInfo.mask | eInfo.mask | fInfo.mask
+	for _, tableIndex := range world.cachedTables(include) {
+		table := world.tables[tableIndex]
+		if table.Mask&exclude != 0 {
+			continue
+		}
+		count := len(table.Entities)
+		if count == 0 {
+			continue
+		}
+		aColumn := table.columns[aInfo.bitIndex]
+		bColumn := table.columns[bInfo.bitIndex]
+		cColumn := table.columns[cInfo.bitIndex]
+		dColumn := table.columns[dInfo.bitIndex]
+		eColumn := table.columns[eInfo.bitIndex]
+		fColumn := table.columns[fInfo.bitIndex]
+		aSlice := unsafe.Slice((*A)(aColumn.dataPtr), count)
+		bSlice := unsafe.Slice((*B)(bColumn.dataPtr), count)
+		cSlice := unsafe.Slice((*C)(cColumn.dataPtr), count)
+		dSlice := unsafe.Slice((*D)(dColumn.dataPtr), count)
+		eSlice := unsafe.Slice((*E)(eColumn.dataPtr), count)
+		fSlice := unsafe.Slice((*F)(fColumn.dataPtr), count)
+		for arrayIndex := 0; arrayIndex < count; arrayIndex++ {
+			if aColumn.changed[arrayIndex] > since ||
+				bColumn.changed[arrayIndex] > since ||
+				cColumn.changed[arrayIndex] > since ||
+				dColumn.changed[arrayIndex] > since ||
+				eColumn.changed[arrayIndex] > since ||
+				fColumn.changed[arrayIndex] > since {
+				callback(table.Entities[arrayIndex], &aSlice[arrayIndex], &bSlice[arrayIndex], &cSlice[arrayIndex], &dSlice[arrayIndex], &eSlice[arrayIndex], &fSlice[arrayIndex])
+			}
+		}
+	}
+}
+
 // Changed reports whether component T on entity was stamped after the
 // previous frame's watermark. False for stale handles, missing components,
 // or types not registered on this world.

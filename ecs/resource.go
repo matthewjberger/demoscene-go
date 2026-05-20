@@ -8,12 +8,22 @@ import "reflect"
 // GameTime float32`. Define your own named types and use them as the type
 // parameter.
 
+// resourceKeyFor returns the reflect.Type used to index resources for T.
+// Centralized so a future optimization (per-world integer IDs assigned
+// on first use, faster slice-indexed storage) has one site to swap.
+// reflect.TypeOf on a compile-time-known T returns a runtime-cached
+// *rtype pointer, so the per-call cost today is essentially a pointer
+// dereference plus the map lookup.
+func resourceKeyFor[T any]() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
 // SetResource installs the resource of type T, or writes through the
 // existing storage if T is already set. Pointers previously returned by
 // Resource[T] therefore remain valid across re-sets; the pointed-at value
 // is updated in place.
 func SetResource[T any](world *World, value T) {
-	key := reflect.TypeOf((*T)(nil)).Elem()
+	key := resourceKeyFor[T]()
 	if existing, ok := world.resources[key]; ok {
 		*(existing.(*T)) = value
 		return
@@ -25,7 +35,7 @@ func SetResource[T any](world *World, value T) {
 // not been set; use HasResource to check first when the resource is
 // optional.
 func Resource[T any](world *World) *T {
-	key := reflect.TypeOf((*T)(nil)).Elem()
+	key := resourceKeyFor[T]()
 	value, ok := world.resources[key]
 	if !ok {
 		panic("freecs: resource " + key.String() + " is not set, call SetResource first")
@@ -35,14 +45,13 @@ func Resource[T any](world *World) *T {
 
 // HasResource reports whether the resource of type T is currently set.
 func HasResource[T any](world *World) bool {
-	key := reflect.TypeOf((*T)(nil)).Elem()
-	_, ok := world.resources[key]
+	_, ok := world.resources[resourceKeyFor[T]()]
 	return ok
 }
 
 // RemoveResource clears the resource of type T. Returns true if it was set.
 func RemoveResource[T any](world *World) bool {
-	key := reflect.TypeOf((*T)(nil)).Elem()
+	key := resourceKeyFor[T]()
 	if _, ok := world.resources[key]; !ok {
 		return false
 	}

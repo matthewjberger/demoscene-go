@@ -194,6 +194,64 @@ func Iter4[A, B, C, D any](world *World, extraInclude, exclude Mask, callback fu
 	}
 }
 
+// Iter5 walks entities that have A, B, C, D, and E.
+func Iter5[A, B, C, D, E any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E)) {
+	aInfo := mustComponentInfo[A](world)
+	bInfo := mustComponentInfo[B](world)
+	cInfo := mustComponentInfo[C](world)
+	dInfo := mustComponentInfo[D](world)
+	eInfo := mustComponentInfo[E](world)
+	include := extraInclude | aInfo.mask | bInfo.mask | cInfo.mask | dInfo.mask | eInfo.mask
+	for _, tableIndex := range world.cachedTables(include) {
+		table := world.tables[tableIndex]
+		if table.Mask&exclude != 0 {
+			continue
+		}
+		count := len(table.Entities)
+		if count == 0 {
+			continue
+		}
+		aSlice := unsafe.Slice((*A)(table.columns[aInfo.bitIndex].dataPtr), count)
+		bSlice := unsafe.Slice((*B)(table.columns[bInfo.bitIndex].dataPtr), count)
+		cSlice := unsafe.Slice((*C)(table.columns[cInfo.bitIndex].dataPtr), count)
+		dSlice := unsafe.Slice((*D)(table.columns[dInfo.bitIndex].dataPtr), count)
+		eSlice := unsafe.Slice((*E)(table.columns[eInfo.bitIndex].dataPtr), count)
+		for arrayIndex := 0; arrayIndex < count; arrayIndex++ {
+			callback(table.Entities[arrayIndex], &aSlice[arrayIndex], &bSlice[arrayIndex], &cSlice[arrayIndex], &dSlice[arrayIndex], &eSlice[arrayIndex])
+		}
+	}
+}
+
+// Iter6 walks entities that have A, B, C, D, E, and F.
+func Iter6[A, B, C, D, E, F any](world *World, extraInclude, exclude Mask, callback func(entity Entity, a *A, b *B, c *C, d *D, e *E, f *F)) {
+	aInfo := mustComponentInfo[A](world)
+	bInfo := mustComponentInfo[B](world)
+	cInfo := mustComponentInfo[C](world)
+	dInfo := mustComponentInfo[D](world)
+	eInfo := mustComponentInfo[E](world)
+	fInfo := mustComponentInfo[F](world)
+	include := extraInclude | aInfo.mask | bInfo.mask | cInfo.mask | dInfo.mask | eInfo.mask | fInfo.mask
+	for _, tableIndex := range world.cachedTables(include) {
+		table := world.tables[tableIndex]
+		if table.Mask&exclude != 0 {
+			continue
+		}
+		count := len(table.Entities)
+		if count == 0 {
+			continue
+		}
+		aSlice := unsafe.Slice((*A)(table.columns[aInfo.bitIndex].dataPtr), count)
+		bSlice := unsafe.Slice((*B)(table.columns[bInfo.bitIndex].dataPtr), count)
+		cSlice := unsafe.Slice((*C)(table.columns[cInfo.bitIndex].dataPtr), count)
+		dSlice := unsafe.Slice((*D)(table.columns[dInfo.bitIndex].dataPtr), count)
+		eSlice := unsafe.Slice((*E)(table.columns[eInfo.bitIndex].dataPtr), count)
+		fSlice := unsafe.Slice((*F)(table.columns[fInfo.bitIndex].dataPtr), count)
+		for arrayIndex := 0; arrayIndex < count; arrayIndex++ {
+			callback(table.Entities[arrayIndex], &aSlice[arrayIndex], &bSlice[arrayIndex], &cSlice[arrayIndex], &dSlice[arrayIndex], &eSlice[arrayIndex], &fSlice[arrayIndex])
+		}
+	}
+}
+
 // Column returns the typed []T view of an archetype's column for T and a
 // flag indicating whether the archetype carries T at all. ok=false means T
 // is not in this archetype's mask; ok=true with an empty slice means T is
