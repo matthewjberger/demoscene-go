@@ -90,11 +90,76 @@ func (assets *MeshAssets) Release() {
 	assets.entries = nil
 }
 
-// UnitTriangleVertices is the built-in mesh registered by NewRenderer
-// as the engine's stock primitive. Same geometry as the prior
-// hardcoded triangle.
+// UnitTriangleVertices is a 1-unit XY triangle facing +Z, with red /
+// green / blue corners.
 var UnitTriangleVertices = []MeshVertex{
 	{Position: [4]float32{0.5, -0.5, 0.0, 1.0}, Color: [4]float32{1.0, 0.0, 0.0, 1.0}},
 	{Position: [4]float32{-0.5, -0.5, 0.0, 1.0}, Color: [4]float32{0.0, 1.0, 0.0, 1.0}},
 	{Position: [4]float32{0.0, 0.5, 0.0, 1.0}, Color: [4]float32{0.0, 0.0, 1.0, 1.0}},
 }
+
+// UnitQuadVertices is a 1-unit XY quad facing +Z, two triangles wound
+// CCW, with red / green / blue / yellow corners.
+var UnitQuadVertices = []MeshVertex{
+	{Position: [4]float32{-0.5, -0.5, 0.0, 1.0}, Color: [4]float32{1.0, 0.0, 0.0, 1.0}},
+	{Position: [4]float32{0.5, -0.5, 0.0, 1.0}, Color: [4]float32{0.0, 1.0, 0.0, 1.0}},
+	{Position: [4]float32{0.5, 0.5, 0.0, 1.0}, Color: [4]float32{0.0, 0.0, 1.0, 1.0}},
+	{Position: [4]float32{-0.5, -0.5, 0.0, 1.0}, Color: [4]float32{1.0, 0.0, 0.0, 1.0}},
+	{Position: [4]float32{0.5, 0.5, 0.0, 1.0}, Color: [4]float32{0.0, 0.0, 1.0, 1.0}},
+	{Position: [4]float32{-0.5, 0.5, 0.0, 1.0}, Color: [4]float32{1.0, 1.0, 0.0, 1.0}},
+}
+
+// UnitCubeVertices is a 1-unit cube centered at origin, 36 vertices
+// (6 faces x 2 triangles x 3 vertices), all wound CCW when viewed from
+// outside. Each face gets its own distinct color so spinning cubes
+// read as 3D rather than as flat colored disks.
+var UnitCubeVertices = func() []MeshVertex {
+	const s = 0.5
+	red := [4]float32{0.9, 0.2, 0.2, 1.0}
+	green := [4]float32{0.2, 0.85, 0.3, 1.0}
+	blue := [4]float32{0.3, 0.45, 0.95, 1.0}
+	yellow := [4]float32{0.95, 0.85, 0.2, 1.0}
+	cyan := [4]float32{0.2, 0.85, 0.9, 1.0}
+	magenta := [4]float32{0.85, 0.3, 0.85, 1.0}
+
+	face := func(a, b, c, d [3]float32, color [4]float32) []MeshVertex {
+		v := func(p [3]float32) MeshVertex {
+			return MeshVertex{Position: [4]float32{p[0], p[1], p[2], 1.0}, Color: color}
+		}
+		return []MeshVertex{v(a), v(b), v(c), v(a), v(c), v(d)}
+	}
+
+	plusZ := face(
+		[3]float32{-s, -s, s}, [3]float32{s, -s, s},
+		[3]float32{s, s, s}, [3]float32{-s, s, s}, blue,
+	)
+	minusZ := face(
+		[3]float32{s, -s, -s}, [3]float32{-s, -s, -s},
+		[3]float32{-s, s, -s}, [3]float32{s, s, -s}, yellow,
+	)
+	plusX := face(
+		[3]float32{s, -s, s}, [3]float32{s, -s, -s},
+		[3]float32{s, s, -s}, [3]float32{s, s, s}, red,
+	)
+	minusX := face(
+		[3]float32{-s, -s, -s}, [3]float32{-s, -s, s},
+		[3]float32{-s, s, s}, [3]float32{-s, s, -s}, cyan,
+	)
+	plusY := face(
+		[3]float32{-s, s, s}, [3]float32{s, s, s},
+		[3]float32{s, s, -s}, [3]float32{-s, s, -s}, green,
+	)
+	minusY := face(
+		[3]float32{-s, -s, -s}, [3]float32{s, -s, -s},
+		[3]float32{s, -s, s}, [3]float32{-s, -s, s}, magenta,
+	)
+
+	out := make([]MeshVertex, 0, 36)
+	out = append(out, plusZ...)
+	out = append(out, minusZ...)
+	out = append(out, plusX...)
+	out = append(out, minusX...)
+	out = append(out, plusY...)
+	out = append(out, minusY...)
+	return out
+}()

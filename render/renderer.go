@@ -48,10 +48,13 @@ type Renderer struct {
 	// world.
 	Meshes *MeshAssets
 
-	// UnitTriangle is the built-in primitive registered at renderer
-	// init. Applications can attach it to entities via [RenderMesh]
-	// without doing their own asset registration.
+	// UnitTriangle / UnitQuad / UnitCube are the built-in primitive
+	// mesh handles registered at renderer init. Applications attach
+	// them to entities via [RenderMesh] without doing their own asset
+	// registration.
 	UnitTriangle MeshHandle
+	UnitQuad     MeshHandle
+	UnitCube     MeshHandle
 }
 
 // NewRenderer acquires an adapter and device from the instance, configures
@@ -101,12 +104,22 @@ func NewRenderer(instance *wgpu.Instance, surface *wgpu.Surface, width, height u
 	renderer.DepthID = renderer.Graph.ResourceByName("depth")
 
 	renderer.Meshes = NewMeshAssets()
-	triangle, err := renderer.Meshes.Register(device, "unit_triangle", UnitTriangleVertices)
-	if err != nil {
-		renderer.Release()
-		return nil, err
+	for _, primitive := range []struct {
+		name     string
+		vertices []MeshVertex
+		out      *MeshHandle
+	}{
+		{"unit_triangle", UnitTriangleVertices, &renderer.UnitTriangle},
+		{"unit_quad", UnitQuadVertices, &renderer.UnitQuad},
+		{"unit_cube", UnitCubeVertices, &renderer.UnitCube},
+	} {
+		handle, err := renderer.Meshes.Register(device, primitive.name, primitive.vertices)
+		if err != nil {
+			renderer.Release()
+			return nil, err
+		}
+		*primitive.out = handle
 	}
-	renderer.UnitTriangle = triangle
 
 	return renderer, nil
 }

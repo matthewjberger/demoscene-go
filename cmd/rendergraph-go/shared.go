@@ -97,7 +97,11 @@ func buildWorlds(renderer *render.Renderer) (Worlds, *app.App) {
 	if demo.ConfigureRenderGraph != nil {
 		demo.ConfigureRenderGraph(engine, renderer)
 	}
-	initializeWorldEntities(worlds, renderer.UnitTriangle)
+	initializeWorldEntities(worlds, []render.MeshHandle{
+		renderer.UnitTriangle,
+		renderer.UnitQuad,
+		renderer.UnitCube,
+	})
 	if err := renderer.Graph.Compile(renderer.Device); err != nil {
 		log.Fatal(err)
 	}
@@ -195,10 +199,11 @@ func spinnerDemo() *app.App {
 	}
 }
 
-// initializeWorldEntities spawns 25 engine entities (transform +
-// RenderMesh) plus 25 matching game entities (Spinner +
-// EngineEntity). The dual-world bridge is the EngineEntity component.
-func initializeWorldEntities(worlds Worlds, mesh render.MeshHandle) {
+// initializeWorldEntities spawns a 5x5 grid of engine entities
+// cycling through the supplied mesh handles for visual variety, plus
+// a matching game entity per engine entity carrying its Spinner state
+// and EngineEntity bridge.
+func initializeWorldEntities(worlds Worlds, meshes []render.MeshHandle) {
 	const (
 		gridExtent  = 2
 		gridSpacing = 1.5
@@ -227,7 +232,7 @@ func initializeWorldEntities(worlds Worlds, mesh render.MeshHandle) {
 			)
 			ecs.Set(worlds.Engine, engineEntity, local)
 			ecs.Set(worlds.Engine, engineEntity, transform.IdentityGlobalTransform())
-			ecs.Set(worlds.Engine, engineEntity, render.RenderMesh{Mesh: mesh})
+			ecs.Set(worlds.Engine, engineEntity, render.RenderMesh{Mesh: meshes[index%len(meshes)]})
 
 			gameEntity := worlds.Game.Spawn(gameMask)
 			ecs.Set(worlds.Game, gameEntity, Spinner{
