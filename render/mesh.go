@@ -9,8 +9,8 @@ import (
 	"github.com/cogentcore/webgpu/wgpu"
 	"github.com/go-gl/mathgl/mgl32"
 
-	"rendergraph-go/ecs"
-	"rendergraph-go/transform"
+	"indigo/ecs"
+	"indigo/transform"
 )
 
 //go:embed mesh.wgsl

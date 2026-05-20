@@ -1,6 +1,6 @@
 package render
 
-import "rendergraph-go/ecs"
+import "indigo/ecs"
 
 // GraphicsSettings is the engine's runtime toggle resource. Each pass
 // reads the relevant bool in Prepare/Execute and skips its work when

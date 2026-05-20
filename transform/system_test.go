@@ -3,8 +3,8 @@ package transform_test
 import (
 	"testing"
 
-	"rendergraph-go/ecs"
-	"rendergraph-go/transform"
+	"indigo/ecs"
+	"indigo/transform"
 )
 
 func newWorld(t *testing.T) *ecs.World {

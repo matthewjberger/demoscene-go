@@ -8,7 +8,7 @@
 // other system does.
 package transform
 
-import "rendergraph-go/ecs"
+import "indigo/ecs"
 
 // LocalTransform is position, rotation, and scale relative to the
 // parent entity (or world origin if the entity has no [Parent]).

@@ -1,6 +1,6 @@
 package main
 
-import "rendergraph-go/render"
+import "indigo/render"
 
 // coloredCubeVertices returns a 36-vertex unit cube with every face
 // painted in the given color. Wound CCW from outside, same six-face

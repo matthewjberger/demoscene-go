@@ -23,10 +23,10 @@ jobs:
           GOOS: js
           GOARCH: wasm
         run: |
-          mkdir -p site/rendergraph-go site/breakout
-          go build -o site/rendergraph-go/main.wasm ./cmd/rendergraph-go
+          mkdir -p site/editor site/breakout
+          go build -o site/editor/main.wasm ./cmd/editor
           go build -o site/breakout/main.wasm ./cmd/breakout
-          cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/rendergraph-go/wasm_exec.js
+          cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/editor/wasm_exec.js
           cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/breakout/wasm_exec.js
 
       - name: Deploy

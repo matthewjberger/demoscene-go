@@ -15,9 +15,9 @@ import (
 	"github.com/cogentcore/webgpu/wgpuglfw"
 	"github.com/go-gl/glfw/v3.3/glfw"
 
-	"rendergraph-go/ecs"
-	"rendergraph-go/render"
-	"rendergraph-go/window"
+	"indigo/ecs"
+	"indigo/render"
+	"indigo/window"
 )
 
 func init() {

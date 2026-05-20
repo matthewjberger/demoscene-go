@@ -5,9 +5,9 @@ import (
 
 	"github.com/go-gl/mathgl/mgl32"
 
-	"rendergraph-go/ecs"
-	"rendergraph-go/transform"
-	"rendergraph-go/window"
+	"indigo/ecs"
+	"indigo/transform"
+	"indigo/window"
 )
 
 // PanOrbitController is the data half of an arc-ball / pan-orbit

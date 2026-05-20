@@ -8,10 +8,10 @@ import (
 
 	"github.com/cogentcore/webgpu/wgpu"
 
-	"rendergraph-go/ecs"
-	"rendergraph-go/render"
-	"rendergraph-go/transform"
-	"rendergraph-go/window"
+	"indigo/ecs"
+	"indigo/render"
+	"indigo/transform"
+	"indigo/window"
 )
 
 func main() {

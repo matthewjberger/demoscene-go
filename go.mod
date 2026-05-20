@@ -1,4 +1,4 @@
-module rendergraph-go
+module indigo
 
 go 1.23
 

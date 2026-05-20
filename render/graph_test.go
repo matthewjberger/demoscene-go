@@ -3,7 +3,7 @@ package render
 import (
 	"testing"
 
-	"rendergraph-go/ecs"
+	"indigo/ecs"
 )
 
 func externalColor(name string) ResourceDescriptor {

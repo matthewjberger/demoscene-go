@@ -1,7 +1,7 @@
 // Package app is the data-oriented analogue of nightshade's State trait.
 //
 // Nightshade's State is an OO trait the application implements; methods
-// dispatch through a vtable. rendergraph-go keeps the same lifecycle hooks but
+// dispatch through a vtable. indigo keeps the same lifecycle hooks but
 // stores them as function-value fields on an [App] struct. Applications
 // construct an [App] and hand it to the main loop; no interfaces, no
 // vtables, no inheritance, just data.
@@ -17,8 +17,8 @@
 package app
 
 import (
-	"rendergraph-go/ecs"
-	"rendergraph-go/render"
+	"indigo/ecs"
+	"indigo/render"
 )
 
 // App is a bundle of lifecycle hooks. Mirrors the names from

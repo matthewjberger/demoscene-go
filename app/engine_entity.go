@@ -1,6 +1,6 @@
 package app
 
-import "rendergraph-go/ecs"
+import "indigo/ecs"
 
 // EngineEntity is the component a game-side entity uses to point at
 // its engine-side counterpart. Mirrors nightshade's

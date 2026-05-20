@@ -7,8 +7,8 @@ import (
 
 	"github.com/cogentcore/webgpu/wgpu"
 
-	"rendergraph-go/ecs"
-	"rendergraph-go/window"
+	"indigo/ecs"
+	"indigo/window"
 )
 
 //go:embed fxaa.wgsl

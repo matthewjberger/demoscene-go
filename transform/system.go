@@ -1,6 +1,6 @@
 package transform
 
-import "rendergraph-go/ecs"
+import "indigo/ecs"
 
 // MaxHierarchyDepth is the maximum parent-chain depth the propagation
 // system will walk.

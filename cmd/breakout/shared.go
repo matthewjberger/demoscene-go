@@ -9,11 +9,11 @@ import (
 
 	"github.com/cogentcore/webgpu/wgpu"
 
-	"rendergraph-go/app"
-	"rendergraph-go/ecs"
-	"rendergraph-go/render"
-	"rendergraph-go/transform"
-	"rendergraph-go/window"
+	"indigo/app"
+	"indigo/ecs"
+	"indigo/render"
+	"indigo/transform"
+	"indigo/window"
 )
 
 // EngineRef on the game world points at the engine world. Game

@@ -3,9 +3,9 @@ package app_test
 import (
 	"testing"
 
-	"rendergraph-go/app"
-	"rendergraph-go/ecs"
-	"rendergraph-go/transform"
+	"indigo/app"
+	"indigo/ecs"
+	"indigo/transform"
 )
 
 func newEngineGame(t *testing.T) (*ecs.World, *ecs.World) {

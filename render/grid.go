@@ -7,7 +7,7 @@ import (
 
 	"github.com/cogentcore/webgpu/wgpu"
 
-	"rendergraph-go/ecs"
+	"indigo/ecs"
 )
 
 //go:embed grid.wgsl

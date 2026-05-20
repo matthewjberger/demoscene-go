@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 
-	"rendergraph-go/app"
-	"rendergraph-go/ecs"
-	"rendergraph-go/render"
-	"rendergraph-go/transform"
-	"rendergraph-go/window"
+	"indigo/app"
+	"indigo/ecs"
+	"indigo/render"
+	"indigo/transform"
+	"indigo/window"
 )
 
 // Field geometry. The play area is a rectangle in the world's XZ

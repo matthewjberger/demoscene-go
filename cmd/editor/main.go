@@ -1,6 +1,6 @@
 //go:build !js
 
-// Command rendergraph-go is the engine demo entry point: a grid of spinning
+// Command indigo is the engine demo entry point: a grid of spinning
 // triangles driven by a dual-world ECS through the engine's render
 // graph, viewed through a pan-orbit camera.
 package main
@@ -15,10 +15,10 @@ import (
 	"github.com/cogentcore/webgpu/wgpuglfw"
 	"github.com/go-gl/glfw/v3.3/glfw"
 
-	"rendergraph-go/ecs"
-	"rendergraph-go/render"
-	"rendergraph-go/transform"
-	"rendergraph-go/window"
+	"indigo/ecs"
+	"indigo/render"
+	"indigo/transform"
+	"indigo/window"
 )
 
 func init() {
@@ -34,7 +34,7 @@ func main() {
 	defer glfw.Terminate()
 
 	glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
-	glfwWindow, err := glfw.CreateWindow(1280, 720, "rendergraph-go", nil, nil)
+	glfwWindow, err := glfw.CreateWindow(1280, 720, "indigo", nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 package render
 
-import "rendergraph-go/transform"
+import "indigo/transform"
 
 // LightType picks one of the three light shapes from glTF's
 // KHR_lights_punctual, matching nightshade's enum.

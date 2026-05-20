@@ -1,15 +1,16 @@
 # Architecture
 
-rendergraph-go is a data-oriented Go game engine ported from
-[nightshade](https://github.com/matthewjberger/nightshade), built on
+indigo is an early data-oriented Go game engine. ECS storage is
 [freecs-go](https://github.com/matthewjberger/freecs-go) (vendored
-inline as `ecs/`).
+inline as `ecs/`). Several design choices, especially the dual-world
+ECS and the render graph shape, are borrowed from
+[nightshade](https://github.com/matthewjberger/nightshade).
 
 ## Principles
 
 - **Data-oriented, not OO.** Data and free functions, never objects
   with methods that own business logic. Where nightshade's Rust uses
-  traits (`State`, `PassNode`), rendergraph-go uses structs whose
+  traits (`State`, `PassNode`), indigo uses structs whose
   fields are function values: `Pass{Reads, Writes, State,
   Prepare, Execute, InvalidateBindGroups, Release}` and
   `App{Initialize, ConfigureRenderGraph, RunSystems, PreRender}`.
@@ -38,12 +39,12 @@ inline as `ecs/`).
 | `window/`  | `Window{Viewport, Timing}` resource, `Advance(timing, delta)`. |
 | `render/`  | Renderer, render graph, passes (mesh, grid, sky, FXAA, present), camera, input, lights, graphics settings. |
 | `app/`     | `App` lifecycle hooks, `EngineEntity` bridge component, `SyncEngine*` helpers. |
-| `cmd/rendergraph-go/` | Demo entry points (desktop `!js`, wasm `js`), schedule wiring, spinner system. |
+| `cmd/editor/` | Demo entry points (desktop `!js`, wasm `js`), schedule wiring, spinner system. |
 | `cmd/serve/` | Tiny file server for the wasm bundle. |
 
 No package depends on a higher layer. `render` depends on
 `ecs`+`transform`+`window`; `app` depends on `ecs`+`render`+`transform`;
-`cmd/rendergraph-go` ties everything together.
+`cmd/editor` ties everything together.
 
 ## ECS
 

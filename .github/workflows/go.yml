@@ -88,7 +88,7 @@ jobs:
         env:
           GOOS: js
           GOARCH: wasm
-        run: go build -o main.wasm ./cmd/rendergraph-go
+        run: go build -o main.wasm ./cmd/editor
 
   build-desktop:
     name: Build desktop
@@ -102,4 +102,4 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
-      - run: go build ./cmd/rendergraph-go
+      - run: go build ./cmd/editor

@@ -1,8 +1,8 @@
 package app
 
 import (
-	"rendergraph-go/ecs"
-	"rendergraph-go/transform"
+	"indigo/ecs"
+	"indigo/transform"
 )
 
 // SyncEngineTransform writes a full LocalTransform onto the engine

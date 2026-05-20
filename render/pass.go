@@ -5,7 +5,7 @@ import (
 
 	"github.com/cogentcore/webgpu/wgpu"
 
-	"rendergraph-go/ecs"
+	"indigo/ecs"
 )
 
 // PassContext is what a pass's Prepare and Execute functions receive each

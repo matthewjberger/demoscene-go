@@ -1,6 +1,6 @@
 package render
 
-import "rendergraph-go/transform"
+import "indigo/transform"
 
 // Input is the engine's per-frame input snapshot. Stored as a typed
 // resource on the engine world; platform glue (GLFW callbacks on

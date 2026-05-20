@@ -1,4 +1,4 @@
-// Package ecs is the data-oriented Entity Component System used by rendergraph-go.
+// Package ecs is the data-oriented Entity Component System used by indigo.
 //
 // It is a verbatim copy of the freecs-go library, renamed to "ecs" so the
 // engine ships as a single self-contained module. See
