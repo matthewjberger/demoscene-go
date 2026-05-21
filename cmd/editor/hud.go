@@ -310,6 +310,9 @@ func handleMenuItem(worlds app.Worlds, hud *HudHandles, entity ecs.Entity) bool 
 		case 2:
 			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
 			settings.ShowSky = !settings.ShowSky
+		case 3:
+			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
+			settings.ShowBounds = !settings.ShowBounds
 		}
 		return true
 	}

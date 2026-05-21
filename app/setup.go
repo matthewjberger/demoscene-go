@@ -43,6 +43,8 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 		return nil, fmt.Errorf("app: register primitives: %w", err)
 	}
 
+	lines := &render.Lines{}
+
 	ecs.SetResource(engine, window.Window{
 		Viewport: window.ViewportSize{
 			Width:  renderer.Config.Width,
@@ -51,6 +53,7 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	})
 	ecs.SetResource(engine, render.RendererResource{Renderer: renderer})
 	ecs.SetResource(engine, render.MeshAssetsResource{Assets: meshAssets})
+	ecs.SetResource(engine, render.LinesResource{Lines: lines})
 	ecs.SetResource(engine, primitives)
 	ecs.SetResource(engine, render.NewInput())
 	ecs.SetResource(engine, render.DefaultGraphicsSettings())

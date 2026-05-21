@@ -131,6 +131,7 @@ func buildWorlds(renderer *render.Renderer) (app.Worlds, *app.App) {
 	worlds.EngineSchedule.Push("gizmos", render.UpdateGizmos)
 	worlds.EngineSchedule.Push("pan_orbit_camera", render.UpdatePanOrbitCamera)
 	worlds.EngineSchedule.Push("transform_propagation", transform.UpdateGlobalTransforms)
+	worlds.EngineSchedule.Push("bounding_volume_lines", render.UpdateBoundingVolumeLines)
 	_ = advanceSpinners
 
 	demo := editorApp()
@@ -171,6 +172,9 @@ func editorApp() *app.App {
 				log.Fatal(err)
 			}
 			if _, err := render.AddGridPass(renderer); err != nil {
+				log.Fatal(err)
+			}
+			if _, err := render.AddLinesPass(renderer); err != nil {
 				log.Fatal(err)
 			}
 			if _, err := render.AddOutlinePass(renderer); err != nil {
@@ -317,7 +321,7 @@ func buildHud(world *ecs.World) HudHandles {
 	h.EditMenu = buildMenuPopup(b, buttonOffset+1*buttonStride, hudTopBarHeight,
 		[]string{"UNDO", "REDO", "DESELECT"})
 	h.ViewMenu = buildMenuPopup(b, buttonOffset+2*buttonStride, hudTopBarHeight,
-		[]string{"RESET CAMERA", "TOGGLE GRID", "TOGGLE SKY"})
+		[]string{"RESET CAMERA", "TOGGLE GRID", "TOGGLE SKY", "TOGGLE BOUNDS"})
 	h.ContextMenu = buildMenuPopup(b, 0, 0,
 		[]string{"DELETE"})
 

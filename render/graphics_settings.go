@@ -13,14 +13,17 @@ type GraphicsSettings struct {
 	ShowSky     bool
 	ShowGrid    bool
 	FxaaEnabled bool
+	ShowBounds  bool
 }
 
-// DefaultGraphicsSettings returns settings with everything enabled.
+// DefaultGraphicsSettings returns settings with everything enabled
+// except the debug bounding-volume overlay.
 func DefaultGraphicsSettings() GraphicsSettings {
 	return GraphicsSettings{
 		ShowSky:     true,
 		ShowGrid:    true,
 		FxaaEnabled: true,
+		ShowBounds:  false,
 	}
 }
 

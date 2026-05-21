@@ -55,6 +55,7 @@ type meshEntry struct {
 	Name        string
 	Vertices    *wgpu.Buffer
 	VertexCount uint32
+	Bounds      BoundingVolume
 }
 
 // MeshAssets is the engine's per-renderer mesh registry. Stored on the
@@ -93,6 +94,7 @@ func (assets *MeshAssets) Register(device *wgpu.Device, name string, vertices []
 		Name:        name,
 		Vertices:    buffer,
 		VertexCount: uint32(len(vertices)),
+		Bounds:      ComputeBounds(vertices),
 	})
 	return handle, nil
 }
@@ -104,6 +106,15 @@ func (assets *MeshAssets) Lookup(handle MeshHandle) (*meshEntry, bool) {
 		return nil, false
 	}
 	return &assets.entries[handle], true
+}
+
+// Bounds returns the AABB of the registered mesh in its local
+// coordinate space. Zero-extent for an unknown handle.
+func (assets *MeshAssets) Bounds(handle MeshHandle) BoundingVolume {
+	if int(handle) >= len(assets.entries) {
+		return BoundingVolume{}
+	}
+	return assets.entries[handle].Bounds
 }
 
 // Count returns the number of registered meshes.
