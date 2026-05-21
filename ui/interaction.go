@@ -44,9 +44,9 @@ type PointerState struct {
 // complexity (a few buttons) the ordering is stable enough; layered
 // menus would want explicit z-order, deferred.
 func InteractionSystem(world *ecs.World) {
-	pointer := ecs.Resource[PointerState](world)
+	pointer := ecs.MustResource[PointerState](world)
 
-	mask := ecs.MaskOf[Node](world) | ecs.MaskOf[Interactive](world)
+	mask := ecs.MustMaskOf[Node](world) | ecs.MustMaskOf[Interactive](world)
 
 	var hit ecs.Entity
 	hasHit := false

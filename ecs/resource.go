@@ -31,16 +31,24 @@ func SetResource[T any](world *World, value T) {
 	world.resources[key] = &value
 }
 
-// Resource returns a pointer to the resource of type T. It panics if T has
-// not been set; use HasResource to check first when the resource is
-// optional.
-func Resource[T any](world *World) *T {
-	key := resourceKeyFor[T]()
-	value, ok := world.resources[key]
+// Resource returns a pointer to the resource of type T and true if
+// it is set, or (nil, false) if it is missing.
+func Resource[T any](world *World) (*T, bool) {
+	value, ok := world.resources[resourceKeyFor[T]()]
 	if !ok {
-		panic("freecs: resource " + key.String() + " is not set, call SetResource first")
+		return nil, false
 	}
-	return value.(*T)
+	return value.(*T), true
+}
+
+// MustResource returns a pointer to the resource of type T or panics
+// if it is missing. Use Resource for optional lookups.
+func MustResource[T any](world *World) *T {
+	r, ok := Resource[T](world)
+	if !ok {
+		panic("freecs: resource " + resourceKeyFor[T]().String() + " is not set, call SetResource first")
+	}
+	return r
 }
 
 // HasResource reports whether the resource of type T is currently set.

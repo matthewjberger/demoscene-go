@@ -31,12 +31,12 @@ func DefaultGraphicsSettings() GraphicsSettings {
 // resets the just-pressed slice each frame.
 func UpdateGraphicsToggles(world *ecs.World) {
 	if ecs.HasResource[ui.WorldRef](world) {
-		if ui.AnyTextInputFocused(ecs.Resource[ui.WorldRef](world).World) {
+		if ui.AnyTextInputFocused(ecs.MustResource[ui.WorldRef](world).World) {
 			return
 		}
 	}
-	input := ecs.Resource[Input](world)
-	settings := ecs.Resource[GraphicsSettings](world)
+	input := ecs.MustResource[Input](world)
+	settings := ecs.MustResource[GraphicsSettings](world)
 	for _, key := range input.KeysJustDown {
 		switch key {
 		case 'G':

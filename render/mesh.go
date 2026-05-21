@@ -333,7 +333,7 @@ const EntityIdFormat = wgpu.TextureFormatR32Uint
 func meshPrepare(s any, context *PassContext) error {
 	state := s.(*meshPassState)
 
-	camera := ecs.Resource[Camera](context.World)
+	camera := ecs.MustResource[Camera](context.World)
 	viewProjection := CameraViewProjection(camera, state.aspectFn())
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.viewProjBuffer, 0, bytesOf(&viewProjection))
 
@@ -344,8 +344,8 @@ func meshPrepare(s any, context *PassContext) error {
 		releaseEntitySlot(state, context, event.Entity)
 	}
 
-	globalMask := ecs.MaskOf[transform.GlobalTransform](context.World)
-	renderMeshMask := ecs.MaskOf[RenderMesh](context.World)
+	globalMask := ecs.MustMaskOf[transform.GlobalTransform](context.World)
+	renderMeshMask := ecs.MustMaskOf[RenderMesh](context.World)
 
 	ecs.IterChanged1[RenderMesh](
 		context.World,
@@ -454,7 +454,7 @@ func meshExecute(s any, context *PassContext) error {
 		return nil
 	}
 
-	assets := ecs.Resource[MeshAssetsResource](context.World).Assets
+	assets := ecs.MustResource[MeshAssetsResource](context.World).Assets
 
 	colorAttachment, err := context.ColorAttachment("color")
 	if err != nil {
@@ -532,8 +532,8 @@ func meshRelease(s any) {
 // world-space -Z axis), matching nightshade's glTF convention.
 func extractLights(world *ecs.World) lightsUniform {
 	out := lightsUniform{}
-	lightMask := ecs.MaskOf[Light](world)
-	globalMask := ecs.MaskOf[transform.GlobalTransform](world)
+	lightMask := ecs.MustMaskOf[Light](world)
+	globalMask := ecs.MustMaskOf[transform.GlobalTransform](world)
 	world.ForEach(lightMask|globalMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		if out.Count >= MaxLights {
 			return

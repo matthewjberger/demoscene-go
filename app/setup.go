@@ -111,10 +111,10 @@ func NewWorlds(renderer *render.Renderer) (Worlds, error) {
 // (which runs after this returns) can still see the current frame's
 // change-detection stamps.
 func TickFrame(worlds Worlds, hooks *App, delta float32) {
-	window.Advance(&ecs.Resource[window.Window](worlds.Engine).Timing, delta)
-	window.Advance(&ecs.Resource[window.Window](worlds.Game).Timing, delta)
+	window.Advance(&ecs.MustResource[window.Window](worlds.Engine).Timing, delta)
+	window.Advance(&ecs.MustResource[window.Window](worlds.Game).Timing, delta)
 	if worlds.UI != nil {
-		window.Advance(&ecs.Resource[window.Window](worlds.UI).Timing, delta)
+		window.Advance(&ecs.MustResource[window.Window](worlds.UI).Timing, delta)
 	}
 
 	if worlds.UI != nil && worlds.UISchedule != nil {
@@ -148,5 +148,5 @@ func PostFrame(worlds Worlds) {
 	if worlds.UI != nil {
 		worlds.UI.Step()
 	}
-	render.InputBeginFrame(ecs.Resource[render.Input](worlds.Engine))
+	render.InputBeginFrame(ecs.MustResource[render.Input](worlds.Engine))
 }

@@ -15,7 +15,7 @@ import (
 // HudContext is the per-frame snapshot of pointers HUD systems
 // share. Computed once at the top of the frame and passed by
 // pointer to every refresh / handler function so they stop
-// repeating ecs.Resource[...] lookups.
+// repeating ecs.MustResource[...] lookups.
 type HudContext struct {
 	Worlds  app.Worlds
 	Engine  *ecs.World
@@ -34,10 +34,10 @@ func newHudContext(worlds app.Worlds) *HudContext {
 		Worlds:  worlds,
 		Engine:  worlds.Engine,
 		UI:      worlds.UI,
-		Input:   ecs.Resource[render.Input](worlds.Engine),
-		Hud:     ecs.Resource[HudHandles](worlds.Engine),
-		Pointer: ecs.Resource[ui.PointerState](worlds.UI),
-		Gizmo:   *ecs.Resource[*render.Gizmos](worlds.Engine),
+		Input:   ecs.MustResource[render.Input](worlds.Engine),
+		Hud:     ecs.MustResource[HudHandles](worlds.Engine),
+		Pointer: ecs.MustResource[ui.PointerState](worlds.UI),
+		Gizmo:   *ecs.MustResource[*render.Gizmos](worlds.Engine),
 	}
 }
 
@@ -63,8 +63,8 @@ func syncUiPointer(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
 	}
-	input := ecs.Resource[render.Input](worlds.Engine)
-	pointer := ecs.Resource[ui.PointerState](worlds.UI)
+	input := ecs.MustResource[render.Input](worlds.Engine)
+	pointer := ecs.MustResource[ui.PointerState](worlds.UI)
 	prevLeft := pointer.LeftDown
 	prevRight := pointer.RightDown
 	pointer.X = input.MousePosition[0]
@@ -81,9 +81,9 @@ func driveTextInputs(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
 	}
-	input := ecs.Resource[render.Input](worlds.Engine)
-	hud := ecs.Resource[HudHandles](worlds.Engine)
-	pointer := ecs.Resource[ui.PointerState](worlds.UI)
+	input := ecs.MustResource[render.Input](worlds.Engine)
+	hud := ecs.MustResource[HudHandles](worlds.Engine)
+	pointer := ecs.MustResource[ui.PointerState](worlds.UI)
 
 	focusedNow := pointer.FocusedEntity == hud.InspectorName
 
@@ -182,11 +182,11 @@ func handleRightClick(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
 	}
-	pointer := ecs.Resource[ui.PointerState](worlds.UI)
+	pointer := ecs.MustResource[ui.PointerState](worlds.UI)
 	if !pointer.RightJustDown {
 		return
 	}
-	hud := ecs.Resource[HudHandles](worlds.Engine)
+	hud := ecs.MustResource[HudHandles](worlds.Engine)
 	for i, row := range hud.TreeRows {
 		if row.ID == 0 {
 			continue
@@ -221,8 +221,8 @@ func handleUiClicks(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
 	}
-	hud := ecs.Resource[HudHandles](worlds.Engine)
-	gizmo := *ecs.Resource[*render.Gizmos](worlds.Engine)
+	hud := ecs.MustResource[HudHandles](worlds.Engine)
+	gizmo := *ecs.MustResource[*render.Gizmos](worlds.Engine)
 
 	clickHandled := false
 	for _, evt := range ecs.DrainEvents[ui.EntityClicked](worlds.UI) {
@@ -265,7 +265,7 @@ func handleUiClicks(worlds app.Worlds) {
 		return
 	}
 
-	pointer := ecs.Resource[ui.PointerState](worlds.UI)
+	pointer := ecs.MustResource[ui.PointerState](worlds.UI)
 	if !pointer.LeftJustDown || clickHandled {
 		return
 	}
@@ -298,17 +298,17 @@ func handleMenuItem(worlds app.Worlds, hud *HudHandles, entity ecs.Entity) bool 
 	if idx := matchItem(hud.ViewMenu, entity); idx >= 0 {
 		switch idx {
 		case 0:
-			controller := ecs.Resource[render.PanOrbitController](worlds.Engine)
+			controller := ecs.MustResource[render.PanOrbitController](worlds.Engine)
 			defaults := render.DefaultPanOrbitController()
 			controller.TargetYaw = defaults.TargetYaw
 			controller.TargetPitch = defaults.TargetPitch
 			controller.TargetRadius = defaults.TargetRadius
 			controller.TargetFocus = defaults.TargetFocus
 		case 1:
-			settings := ecs.Resource[render.GraphicsSettings](worlds.Engine)
+			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
 			settings.ShowGrid = !settings.ShowGrid
 		case 2:
-			settings := ecs.Resource[render.GraphicsSettings](worlds.Engine)
+			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
 			settings.ShowSky = !settings.ShowSky
 		}
 		return true
@@ -337,7 +337,7 @@ func matchItem(menu menuPopup, entity ecs.Entity) int {
 }
 
 func pointerOverMenuGeometry(uiWorld *ecs.World, hud *HudHandles) bool {
-	pointer := ecs.Resource[ui.PointerState](uiWorld)
+	pointer := ecs.MustResource[ui.PointerState](uiWorld)
 	var menu menuPopup
 	var button ecs.Entity
 	switch hud.OpenMenu {
@@ -499,7 +499,7 @@ func setMenuVisible(world *ecs.World, menu menuPopup, visible bool) {
 }
 
 func (c *HudContext) refreshHudLayout() {
-	w := ecs.Resource[window.Window](c.UI).Viewport
+	w := ecs.MustResource[window.Window](c.UI).Viewport
 	width := float32(w.Width)
 	height := float32(w.Height)
 	changed := false
@@ -547,7 +547,7 @@ type namedEntity struct {
 func (c *HudContext) refreshEntityTree() {
 	selected, hasSelected := render.SelectedTarget(c.Engine)
 
-	nameMask := ecs.MaskOf[app.Name](c.Engine)
+	nameMask := ecs.MustMaskOf[app.Name](c.Engine)
 	var entries []namedEntity
 	c.Engine.ForEach(nameMask, 0, func(entity ecs.Entity, table *ecs.Archetype, columnIndex int) {
 		names, _ := ecs.Column[app.Name](c.Engine, table)

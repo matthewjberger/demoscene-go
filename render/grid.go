@@ -169,7 +169,7 @@ func NewGridPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect f
 
 func gridPrepare(s any, context *PassContext) error {
 	state := s.(*gridPassState)
-	camera := ecs.Resource[Camera](context.World)
+	camera := ecs.MustResource[Camera](context.World)
 	aspect := state.aspectFn()
 
 	viewProj := CameraViewProjection(camera, aspect)
@@ -189,7 +189,7 @@ func gridPrepare(s any, context *PassContext) error {
 
 func gridExecute(s any, context *PassContext) error {
 	state := s.(*gridPassState)
-	settings := ecs.Resource[GraphicsSettings](context.World)
+	settings := ecs.MustResource[GraphicsSettings](context.World)
 	if !settings.ShowGrid {
 		return nil
 	}

@@ -45,7 +45,7 @@ func ProcessPickingReadback(_ *Renderer, world *ecs.World) {
 	if !ecs.HasResource[*Picking](world) {
 		return
 	}
-	picking := *ecs.Resource[*Picking](world)
+	picking := *ecs.MustResource[*Picking](world)
 	if picking == nil || !picking.hasInFlight || picking.staging == nil {
 		return
 	}
@@ -126,14 +126,14 @@ func clearPickingJS(picking *Picking) {
 	delete(pickingJSStates, picking)
 }
 
-// bufferJSValue extracts the underlying js.Value from a cogentcore
-// wgpu.Buffer on JS. The wrapper struct is
-//
-//	type Buffer struct { jsValue js.Value }
-//
-// with the field unexported, so we read it via an unsafe pointer
-// cast. Pinned to cogentcore/webgpu's JS Buffer layout; revisit if
-// the dependency layout changes.
+// bufferJSValue extracts cogentcore/webgpu's unexported jsValue
+// field. The wrapper is `type Buffer struct { jsValue js.Value }`
+// and there's no public accessor, so this is the only path. The
+// size assertion below fails to compile if a future dependency
+// bump adds fields, surfacing the breakage loudly instead of as a
+// silent memory-read at runtime.
+var _ [unsafe.Sizeof(wgpu.Buffer{}) - unsafe.Sizeof(js.Value{})]struct{} = [0]struct{}{}
+
 func bufferJSValue(buffer *wgpu.Buffer) js.Value {
 	if buffer == nil {
 		return js.Null()

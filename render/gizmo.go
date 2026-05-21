@@ -91,7 +91,7 @@ func AxisDirection(axis uint8) mgl32.Vec3 {
 // SelectedTarget returns the first entity carrying a [Selected]
 // tag, or the zero entity if nothing is selected.
 func SelectedTarget(world *ecs.World) (ecs.Entity, bool) {
-	mask := ecs.MaskOf[Selected](world)
+	mask := ecs.MustMaskOf[Selected](world)
 	var found ecs.Entity
 	hasFound := false
 	world.ForEach(mask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {

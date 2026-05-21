@@ -149,7 +149,7 @@ func NewSkyPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect fu
 
 func skyPrepare(s any, context *PassContext) error {
 	state := s.(*skyPassState)
-	camera := ecs.Resource[Camera](context.World)
+	camera := ecs.MustResource[Camera](context.World)
 	aspect := state.aspectFn()
 	proj := CameraProjection(camera, aspect)
 	view := CameraView(camera)
@@ -168,7 +168,7 @@ func skyPrepare(s any, context *PassContext) error {
 
 func skyExecute(s any, context *PassContext) error {
 	state := s.(*skyPassState)
-	settings := ecs.Resource[GraphicsSettings](context.World)
+	settings := ecs.MustResource[GraphicsSettings](context.World)
 
 	colorAttachment, err := context.ColorAttachment("color")
 	if err != nil {

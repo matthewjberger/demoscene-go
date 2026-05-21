@@ -61,9 +61,9 @@ func (b *Builder) Pop() *Builder {
 // Node spawns a bare UI entity carrying just a [Node] component and
 // (if a parent is on the stack) a [Parent] link.
 func (b *Builder) Node(node Node) *Builder {
-	mask := ecs.MaskOf[Node](b.world)
+	mask := ecs.MustMaskOf[Node](b.world)
 	if len(b.stack) > 0 {
-		mask |= ecs.MaskOf[Parent](b.world)
+		mask |= ecs.MustMaskOf[Parent](b.world)
 	}
 	entity := b.world.Spawn(mask)
 	ecs.Set(b.world, entity, node)

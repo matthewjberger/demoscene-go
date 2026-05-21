@@ -26,7 +26,7 @@ func ProcessPickingReadback(renderer *Renderer, world *ecs.World) {
 	if !ecs.HasResource[*Picking](world) {
 		return
 	}
-	picking := *ecs.Resource[*Picking](world)
+	picking := *ecs.MustResource[*Picking](world)
 	if picking == nil || !picking.hasInFlight || picking.staging == nil {
 		return
 	}

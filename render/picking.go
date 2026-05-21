@@ -121,7 +121,7 @@ func pickingPrepare(s any, context *PassContext) error {
 		if !ecs.HasResource[*Picking](context.World) {
 			return nil
 		}
-		state.picking = *ecs.Resource[*Picking](context.World)
+		state.picking = *ecs.MustResource[*Picking](context.World)
 	}
 
 	picking := state.picking

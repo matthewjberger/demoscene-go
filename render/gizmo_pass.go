@@ -163,8 +163,8 @@ func gizmoPrepare(s any, context *PassContext) error {
 		return nil
 	}
 
-	camera := ecs.Resource[Camera](context.World)
-	renderer := ecs.Resource[RendererResource](context.World).Renderer
+	camera := ecs.MustResource[Camera](context.World)
+	renderer := ecs.MustResource[RendererResource](context.World).Renderer
 	aspect := state.aspectFn()
 	viewport := [2]float32{
 		float32(renderer.Config.Width),
@@ -384,5 +384,5 @@ func lookupGizmosPtr(world *ecs.World) (**Gizmos, bool) {
 	if !ecs.HasResource[*Gizmos](world) {
 		return nil, false
 	}
-	return ecs.Resource[*Gizmos](world), true
+	return ecs.MustResource[*Gizmos](world), true
 }

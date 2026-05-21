@@ -17,13 +17,13 @@ func UpdateGizmos(world *ecs.World) {
 	if !ecs.HasResource[*Gizmos](world) {
 		return
 	}
-	gizmoPtr := ecs.Resource[*Gizmos](world)
+	gizmoPtr := ecs.MustResource[*Gizmos](world)
 	gizmo := *gizmoPtr
 	if gizmo == nil {
 		return
 	}
 
-	input := ecs.Resource[Input](world)
+	input := ecs.MustResource[Input](world)
 	leftDown := input.LeftDown
 	leftJustDown := leftDown && !gizmo.prevLeftDown
 	leftJustUp := !leftDown && gizmo.prevLeftDown
@@ -51,8 +51,8 @@ func UpdateGizmos(world *ecs.World) {
 		global.Matrix[12], global.Matrix[13], global.Matrix[14],
 	}
 
-	camera := ecs.Resource[Camera](world)
-	renderer := ecs.Resource[RendererResource](world).Renderer
+	camera := ecs.MustResource[Camera](world)
+	renderer := ecs.MustResource[RendererResource](world).Renderer
 	aspect := renderer.AspectRatio()
 	viewport := [2]float32{
 		float32(renderer.Config.Width),

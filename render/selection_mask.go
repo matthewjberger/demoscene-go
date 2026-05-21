@@ -171,7 +171,7 @@ func selectionMaskPrepare(s any, context *PassContext) error {
 		state.bitsetScratch[i] = 0
 	}
 
-	selectedMask := ecs.MaskOf[Selected](context.World)
+	selectedMask := ecs.MustMaskOf[Selected](context.World)
 	context.World.ForEach(selectedMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
 		id := entity.ID
 		word := id / 32

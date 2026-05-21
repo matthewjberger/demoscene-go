@@ -87,10 +87,10 @@ func DefaultPanOrbitController() PanOrbitController {
 // viewport from the [window.Window] resource so the system signature
 // is (*World), the shape an [ecs.Schedule] expects.
 func UpdatePanOrbitCamera(world *ecs.World) {
-	w := ecs.Resource[window.Window](world)
-	controller := ecs.Resource[PanOrbitController](world)
-	camera := ecs.Resource[Camera](world)
-	input := ecs.Resource[Input](world)
+	w := ecs.MustResource[window.Window](world)
+	controller := ecs.MustResource[PanOrbitController](world)
+	camera := ecs.MustResource[Camera](world)
+	input := ecs.MustResource[Input](world)
 
 	width := float32(w.Viewport.Width)
 	height := float32(w.Viewport.Height)
@@ -113,15 +113,15 @@ func UpdatePanOrbitCamera(world *ecs.World) {
 // in that case so left-button drag of a handle doesn't also orbit.
 func mouseCapturedByOverlay(world *ecs.World) bool {
 	if ecs.HasResource[*Gizmos](world) {
-		g := *ecs.Resource[*Gizmos](world)
+		g := *ecs.MustResource[*Gizmos](world)
 		if g != nil && (g.Dragging || g.HoverAxis >= 0) {
 			return true
 		}
 	}
 	if ecs.HasResource[ui.WorldRef](world) {
-		uiWorld := ecs.Resource[ui.WorldRef](world).World
+		uiWorld := ecs.MustResource[ui.WorldRef](world).World
 		if uiWorld != nil && ecs.HasResource[ui.PointerState](uiWorld) {
-			pointer := ecs.Resource[ui.PointerState](uiWorld)
+			pointer := ecs.MustResource[ui.PointerState](uiWorld)
 			if pointer.OverUI {
 				return true
 			}

@@ -69,7 +69,7 @@ func buildWorlds(renderer *render.Renderer) (app.Worlds, *app.App) {
 		demo.ConfigureRenderGraph(engine, renderer)
 	}
 
-	assets := ecs.Resource[render.MeshAssetsResource](engine).Assets
+	assets := ecs.MustResource[render.MeshAssetsResource](engine).Assets
 	palette, err := registerBreakoutPalette(renderer.Device, assets)
 	if err != nil {
 		log.Fatal(err)
@@ -100,10 +100,10 @@ func breakoutCamera() render.Camera {
 // pointing diagonally down (mostly -Y with a -Z lean) so the brick
 // tops and the brick front faces both pick up Lambert shading.
 func spawnBreakoutSun(engine *ecs.World) {
-	mask := ecs.MaskOf[transform.LocalTransform](engine) |
-		ecs.MaskOf[transform.GlobalTransform](engine) |
-		ecs.MaskOf[transform.LocalTransformDirty](engine) |
-		ecs.MaskOf[render.Light](engine)
+	mask := ecs.MustMaskOf[transform.LocalTransform](engine) |
+		ecs.MustMaskOf[transform.GlobalTransform](engine) |
+		ecs.MustMaskOf[transform.LocalTransformDirty](engine) |
+		ecs.MustMaskOf[render.Light](engine)
 	sun := engine.Spawn(mask)
 	local := transform.IdentityLocalTransform()
 	local.Rotation = transform.QuatFromAxisAngle(-1.1, transform.Vec3{1, 0, 0})
@@ -147,14 +147,14 @@ func breakoutApp() *app.App {
 // breakoutResetSystem rebuilds the brick wall and resets the ball
 // when the input system sets [GameState.RequestReset].
 func breakoutResetSystem(game *ecs.World) {
-	state := ecs.Resource[GameState](game)
+	state := ecs.MustResource[GameState](game)
 	if !state.RequestReset {
 		return
 	}
 	state.RequestReset = false
-	engine := ecs.Resource[app.EngineRef](game).World
+	engine := ecs.MustResource[app.EngineRef](game).World
 
-	brickMask := ecs.MaskOf[Brick](game) | ecs.MaskOf[app.EngineEntity](game)
+	brickMask := ecs.MustMaskOf[Brick](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	var dead []ecs.Entity
 	for entity := range game.Query(brickMask, 0) {
 		dead = append(dead, entity)
@@ -163,7 +163,7 @@ func breakoutResetSystem(game *ecs.World) {
 		app.DespawnLinked(engine, game, entity)
 	}
 
-	ballMask := ecs.MaskOf[Ball](game) | ecs.MaskOf[app.EngineEntity](game)
+	ballMask := ecs.MustMaskOf[Ball](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	game.ForEach(ballMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		balls, _ := ecs.Column[Ball](game, table)
 		b := &balls[index]
@@ -177,17 +177,17 @@ func breakoutResetSystem(game *ecs.World) {
 	state.Lost = false
 	state.Started = false
 
-	palette := ecs.Resource[PaletteResource](game).Palette
+	palette := ecs.MustResource[PaletteResource](game).Palette
 	respawnBricks(app.Worlds{Engine: engine, Game: game}, palette)
 }
 
 func respawnBricks(worlds app.Worlds, palette brickPalette) {
-	engineMask := ecs.MaskOf[transform.LocalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.GlobalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.LocalTransformDirty](worlds.Engine) |
-		ecs.MaskOf[render.RenderMesh](worlds.Engine) |
-		ecs.MaskOf[render.Material](worlds.Engine)
-	brickMask := ecs.MaskOf[Brick](worlds.Game) | ecs.MaskOf[app.EngineEntity](worlds.Game)
+	engineMask := ecs.MustMaskOf[transform.LocalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.GlobalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.LocalTransformDirty](worlds.Engine) |
+		ecs.MustMaskOf[render.RenderMesh](worlds.Engine) |
+		ecs.MustMaskOf[render.Material](worlds.Engine)
+	brickMask := ecs.MustMaskOf[Brick](worlds.Game) | ecs.MustMaskOf[app.EngineEntity](worlds.Game)
 
 	brickWidth := brickHalfWidth * 2
 	totalWidth := brickWidth * brickCols

@@ -101,8 +101,8 @@ func updateBreakoutHud(worlds app.Worlds, delta float32) {
 	if worlds.UI == nil {
 		return
 	}
-	hud := ecs.Resource[BreakoutHud](worlds.Engine)
-	state := ecs.Resource[GameState](worlds.Game)
+	hud := ecs.MustResource[BreakoutHud](worlds.Engine)
+	state := ecs.MustResource[GameState](worlds.Game)
 
 	if label, ok := ecs.GetMut[ui.Text](worlds.UI, hud.ScoreLabel); ok {
 		label.Content = "SCORE " + strconv.Itoa(state.Score)
@@ -176,8 +176,8 @@ func handleBreakoutUiClicks(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
 	}
-	hud := ecs.Resource[BreakoutHud](worlds.Engine)
-	state := ecs.Resource[GameState](worlds.Game)
+	hud := ecs.MustResource[BreakoutHud](worlds.Engine)
+	state := ecs.MustResource[GameState](worlds.Game)
 	for _, evt := range ecs.DrainEvents[ui.EntityClicked](worlds.UI) {
 		if evt.Entity == hud.RestartButton && (state.Won || state.Lost) {
 			state.RequestReset = true
@@ -189,8 +189,8 @@ func syncBreakoutUiPointer(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
 	}
-	input := ecs.Resource[render.Input](worlds.Engine)
-	pointer := ecs.Resource[ui.PointerState](worlds.UI)
+	input := ecs.MustResource[render.Input](worlds.Engine)
+	pointer := ecs.MustResource[ui.PointerState](worlds.UI)
 	prevDown := pointer.LeftDown
 	pointer.X = input.MousePosition[0]
 	pointer.Y = input.MousePosition[1]

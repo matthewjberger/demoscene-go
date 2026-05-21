@@ -27,7 +27,7 @@ import (
 // Depth is recomputed per frame since the tree is small and parent
 // links can change.
 func LayoutSystem(world *ecs.World) {
-	state := ecs.Resource[LayoutState](world)
+	state := ecs.MustResource[LayoutState](world)
 	if !state.Dirty {
 		return
 	}
@@ -41,8 +41,8 @@ func LayoutSystem(world *ecs.World) {
 		delete(state.Children, k)
 	}
 
-	nodeMask := ecs.MaskOf[Node](world)
-	parentMask := ecs.MaskOf[Parent](world)
+	nodeMask := ecs.MustMaskOf[Node](world)
+	parentMask := ecs.MustMaskOf[Parent](world)
 
 	world.ForEach(nodeMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
 		state.Order = append(state.Order, entity)
@@ -105,7 +105,7 @@ func MarkLayoutDirty(world *ecs.World) {
 	if !ecs.HasResource[LayoutState](world) {
 		return
 	}
-	state := ecs.Resource[LayoutState](world)
+	state := ecs.MustResource[LayoutState](world)
 	state.Dirty = true
 }
 
@@ -242,6 +242,6 @@ func anchoredOrigin(node *Node, viewportW, viewportH float32) (float32, float32)
 }
 
 func viewportSize(world *ecs.World) (float32, float32) {
-	w := ecs.Resource[window.Window](world)
+	w := ecs.MustResource[window.Window](world)
 	return float32(w.Viewport.Width), float32(w.Viewport.Height)
 }

@@ -227,9 +227,9 @@ func uiTextPrepare(s any, context *PassContext) error {
 	if !ui.HasUI(context.World) {
 		return nil
 	}
-	uiWorld := ecs.Resource[ui.WorldRef](context.World).World
+	uiWorld := ecs.MustResource[ui.WorldRef](context.World).World
 
-	mask := ecs.MaskOf[ui.Node](uiWorld) | ecs.MaskOf[ui.Text](uiWorld)
+	mask := ecs.MustMaskOf[ui.Node](uiWorld) | ecs.MustMaskOf[ui.Text](uiWorld)
 	atlasWidth := float32(state.atlas.Width)
 	cellW := float32(state.atlas.GlyphWidth)
 	cellH := float32(state.atlas.GlyphHeight)
@@ -291,8 +291,8 @@ func uiTextPrepare(s any, context *PassContext) error {
 	}
 
 	viewport := uiQuadViewport{
-		Width:  float32(ecs.Resource[RendererResource](context.World).Renderer.Config.Width),
-		Height: float32(ecs.Resource[RendererResource](context.World).Renderer.Config.Height),
+		Width:  float32(ecs.MustResource[RendererResource](context.World).Renderer.Config.Width),
+		Height: float32(ecs.MustResource[RendererResource](context.World).Renderer.Config.Height),
 	}
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.viewportBuffer, 0, bytesOf(&viewport))
 

@@ -45,15 +45,15 @@ const (
 // uses the same white-cube mesh; the tint comes from the per-entity
 // Material component.
 func spawnBreakoutScene(worlds app.Worlds, palette brickPalette) {
-	engineMask := ecs.MaskOf[transform.LocalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.GlobalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.LocalTransformDirty](worlds.Engine) |
-		ecs.MaskOf[render.RenderMesh](worlds.Engine) |
-		ecs.MaskOf[render.Material](worlds.Engine)
+	engineMask := ecs.MustMaskOf[transform.LocalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.GlobalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.LocalTransformDirty](worlds.Engine) |
+		ecs.MustMaskOf[render.RenderMesh](worlds.Engine) |
+		ecs.MustMaskOf[render.Material](worlds.Engine)
 
-	paddleMask := ecs.MaskOf[Paddle](worlds.Game) | ecs.MaskOf[app.EngineEntity](worlds.Game)
-	ballMask := ecs.MaskOf[Ball](worlds.Game) | ecs.MaskOf[app.EngineEntity](worlds.Game)
-	brickMask := ecs.MaskOf[Brick](worlds.Game) | ecs.MaskOf[app.EngineEntity](worlds.Game)
+	paddleMask := ecs.MustMaskOf[Paddle](worlds.Game) | ecs.MustMaskOf[app.EngineEntity](worlds.Game)
+	ballMask := ecs.MustMaskOf[Ball](worlds.Game) | ecs.MustMaskOf[app.EngineEntity](worlds.Game)
+	brickMask := ecs.MustMaskOf[Brick](worlds.Game) | ecs.MustMaskOf[app.EngineEntity](worlds.Game)
 
 	paddlePos := transform.Vec3{0, 0, fieldBottom}
 	paddleEngine := worlds.Engine.Spawn(engineMask)
@@ -126,11 +126,11 @@ func spawnBreakoutScene(worlds app.Worlds, palette brickPalette) {
 // are held checks via [render.InputIsKeyDown]; space and R are
 // edge-triggered via KeysJustDown.
 func breakoutInputSystem(game *ecs.World) {
-	engineRef := ecs.Resource[app.EngineRef](game)
+	engineRef := ecs.MustResource[app.EngineRef](game)
 	engine := engineRef.World
-	input := ecs.Resource[render.Input](engine)
-	state := ecs.Resource[GameState](game)
-	delta := ecs.Resource[window.Window](game).Timing.DeltaSeconds
+	input := ecs.MustResource[render.Input](engine)
+	state := ecs.MustResource[GameState](game)
+	delta := ecs.MustResource[window.Window](game).Timing.DeltaSeconds
 
 	leftHeld := render.InputIsKeyDown(input, 'A')
 	rightHeld := render.InputIsKeyDown(input, 'D')
@@ -146,7 +146,7 @@ func breakoutInputSystem(game *ecs.World) {
 		}
 	}
 
-	paddleMask := ecs.MaskOf[Paddle](game) | ecs.MaskOf[app.EngineEntity](game)
+	paddleMask := ecs.MustMaskOf[Paddle](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	game.ForEach(paddleMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		paddles, _ := ecs.Column[Paddle](game, table)
 		p := &paddles[index]
@@ -173,7 +173,7 @@ func breakoutInputSystem(game *ecs.World) {
 	}
 
 	state.Started = true
-	ballMask := ecs.MaskOf[Ball](game) | ecs.MaskOf[app.EngineEntity](game)
+	ballMask := ecs.MustMaskOf[Ball](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	game.ForEach(ballMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		balls, _ := ecs.Column[Ball](game, table)
 		b := &balls[index]
@@ -190,14 +190,14 @@ func breakoutInputSystem(game *ecs.World) {
 // Brick hits despawn the linked engine entity through the named sync
 // API. The ball stays glued to the paddle while unlaunched.
 func breakoutBallSystem(game *ecs.World) {
-	engineRef := ecs.Resource[app.EngineRef](game)
+	engineRef := ecs.MustResource[app.EngineRef](game)
 	engine := engineRef.World
-	state := ecs.Resource[GameState](game)
-	delta := ecs.Resource[window.Window](game).Timing.DeltaSeconds
+	state := ecs.MustResource[GameState](game)
+	delta := ecs.MustResource[window.Window](game).Timing.DeltaSeconds
 
 	var paddlePos transform.Vec3
 	var paddleHalf transform.Vec3
-	paddleMask := ecs.MaskOf[Paddle](game) | ecs.MaskOf[app.EngineEntity](game)
+	paddleMask := ecs.MustMaskOf[Paddle](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	game.ForEach(paddleMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		paddles, _ := ecs.Column[Paddle](game, table)
 		paddlePos = paddles[index].Position
@@ -210,7 +210,7 @@ func breakoutBallSystem(game *ecs.World) {
 	}
 	var hits []brickHit
 
-	ballMask := ecs.MaskOf[Ball](game) | ecs.MaskOf[app.EngineEntity](game)
+	ballMask := ecs.MustMaskOf[Ball](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	game.ForEach(ballMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		balls, _ := ecs.Column[Ball](game, table)
 		b := &balls[index]
@@ -245,7 +245,7 @@ func breakoutBallSystem(game *ecs.World) {
 			b.Position[2] = paddlePos[2] - paddleHalf[2] - b.Radius
 		}
 
-		brickMask := ecs.MaskOf[Brick](game) | ecs.MaskOf[app.EngineEntity](game)
+		brickMask := ecs.MustMaskOf[Brick](game) | ecs.MustMaskOf[app.EngineEntity](game)
 		game.ForEach(brickMask, 0, func(brickEntity ecs.Entity, brickTable *ecs.Archetype, brickIndex int) {
 			bricks, _ := ecs.Column[Brick](game, brickTable)
 			brick := &bricks[brickIndex]
@@ -291,11 +291,11 @@ func breakoutBallSystem(game *ecs.World) {
 // breakoutWinSystem flags the GameState as won when the brick wall
 // is empty.
 func breakoutWinSystem(game *ecs.World) {
-	state := ecs.Resource[GameState](game)
+	state := ecs.MustResource[GameState](game)
 	if state.Won || state.Lost {
 		return
 	}
-	if game.CountQuery(ecs.MaskOf[Brick](game), 0) == 0 {
+	if game.CountQuery(ecs.MustMaskOf[Brick](game), 0) == 0 {
 		state.Won = true
 	}
 }
@@ -306,17 +306,17 @@ func breakoutWinSystem(game *ecs.World) {
 // this is technically redundant for them, but it keeps the pattern
 // uniform with the spinner demo.
 func breakoutSyncSystem(game *ecs.World) {
-	engineRef := ecs.Resource[app.EngineRef](game)
+	engineRef := ecs.MustResource[app.EngineRef](game)
 	engine := engineRef.World
 
-	paddleMask := ecs.MaskOf[Paddle](game) | ecs.MaskOf[app.EngineEntity](game)
+	paddleMask := ecs.MustMaskOf[Paddle](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	game.ForEach(paddleMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		paddles, _ := ecs.Column[Paddle](game, table)
 		links, _ := ecs.Column[app.EngineEntity](game, table)
 		app.SyncEngineTranslation(engine, links[index], paddles[index].Position)
 	})
 
-	ballMask := ecs.MaskOf[Ball](game) | ecs.MaskOf[app.EngineEntity](game)
+	ballMask := ecs.MustMaskOf[Ball](game) | ecs.MustMaskOf[app.EngineEntity](game)
 	game.ForEach(ballMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		balls, _ := ecs.Column[Ball](game, table)
 		links, _ := ecs.Column[app.EngineEntity](game, table)

@@ -66,9 +66,9 @@ func main() {
 			js.Global().Get("console").Call("error", "resize failed: "+err.Error())
 		}
 		viewport := window.ViewportSize{Width: w, Height: h}
-		ecs.Resource[window.Window](worlds.Engine).Viewport = viewport
+		ecs.MustResource[window.Window](worlds.Engine).Viewport = viewport
 		if worlds.UI != nil {
-			ecs.Resource[window.Window](worlds.UI).Viewport = viewport
+			ecs.MustResource[window.Window](worlds.UI).Viewport = viewport
 		}
 		return nil
 	})
@@ -90,7 +90,7 @@ func main() {
 		handleBreakoutUiClicks(worlds)
 		updateBreakoutHud(worlds, delta)
 
-		title := titleForState(ecs.Resource[GameState](worlds.Game))
+		title := titleForState(ecs.MustResource[GameState](worlds.Game))
 		if titleEl.Truthy() {
 			titleEl.Set("textContent", title)
 		}
@@ -126,7 +126,7 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 		if !ok {
 			return nil
 		}
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		render.InputMarkKeyDown(input, r)
 		return nil
 	}))
@@ -139,7 +139,7 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 		if !ok {
 			return nil
 		}
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		render.InputMarkKeyUp(input, r)
 		return nil
 	}))

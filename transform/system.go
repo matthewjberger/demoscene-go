@@ -48,7 +48,7 @@ func NewPropagationState() PropagationState {
 // children) and tolerates Parent re-parenting without a separately-
 // maintained cache.
 func UpdateGlobalTransforms(world *ecs.World) {
-	scratch := ecs.Resource[PropagationState](world)
+	scratch := ecs.MustResource[PropagationState](world)
 	scratch.Dirty = scratch.Dirty[:0]
 	scratch.Depths = scratch.Depths[:0]
 	scratch.Order = scratch.Order[:0]
@@ -60,9 +60,9 @@ func UpdateGlobalTransforms(world *ecs.World) {
 		delete(scratch.Seen, k)
 	}
 
-	localMask := ecs.MaskOf[LocalTransform](world)
-	globalMask := ecs.MaskOf[GlobalTransform](world)
-	dirtyMask := ecs.MaskOf[LocalTransformDirty](world)
+	localMask := ecs.MustMaskOf[LocalTransform](world)
+	globalMask := ecs.MustMaskOf[GlobalTransform](world)
+	dirtyMask := ecs.MustMaskOf[LocalTransformDirty](world)
 
 	world.ForEach(localMask|globalMask|dirtyMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
 		scratch.Dirty = append(scratch.Dirty, entity)
@@ -73,7 +73,7 @@ func UpdateGlobalTransforms(world *ecs.World) {
 		return
 	}
 
-	parentMask := ecs.MaskOf[Parent](world)
+	parentMask := ecs.MustMaskOf[Parent](world)
 	world.ForEach(parentMask, 0, func(entity ecs.Entity, table *ecs.Archetype, index int) {
 		parents, _ := ecs.Column[Parent](world, table)
 		p := &parents[index]

@@ -67,9 +67,9 @@ func main() {
 			js.Global().Get("console").Call("error", "resize failed: "+err.Error())
 		}
 		viewport := window.ViewportSize{Width: w, Height: h}
-		ecs.Resource[window.Window](worlds.Engine).Viewport = viewport
+		ecs.MustResource[window.Window](worlds.Engine).Viewport = viewport
 		if worlds.UI != nil {
-			ecs.Resource[window.Window](worlds.UI).Viewport = viewport
+			ecs.MustResource[window.Window](worlds.UI).Viewport = viewport
 		}
 		return nil
 	})
@@ -105,7 +105,7 @@ func main() {
 
 		render.ProcessPickingReadback(renderer, worlds.Engine)
 
-		if picking := ecs.Resource[*render.Picking](worlds.Engine); (*picking).Result != nil {
+		if picking := ecs.MustResource[*render.Picking](worlds.Engine); (*picking).Result != nil {
 			result := (*picking).Result
 			(*picking).Result = nil
 			handlePickResult(worlds, result.EntityID)
@@ -132,7 +132,7 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 			return nil
 		}
 		event := args[0]
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		x := float32(event.Get("offsetX").Float())
 		y := float32(event.Get("offsetY").Float())
 		dx := float32(event.Get("movementX").Float())
@@ -150,9 +150,9 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 		button := event.Get("button").Int()
 		setMouseButton(engine, button, true)
 		if button == 0 {
-			picking := *ecs.Resource[*render.Picking](engine)
+			picking := *ecs.MustResource[*render.Picking](engine)
 			if picking != nil {
-				input := ecs.Resource[render.Input](engine)
+				input := ecs.MustResource[render.Input](engine)
 				render.QueuePick(picking, uint32(input.MousePosition[0]), uint32(input.MousePosition[1]))
 			}
 		}
@@ -174,7 +174,7 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 		}
 		event := args[0]
 		event.Call("preventDefault")
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		deltaY := float32(event.Get("deltaY").Float())
 		input.Wheel -= deltaY * 0.01
 		return nil
@@ -195,7 +195,7 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 		if !ok {
 			return nil
 		}
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		render.InputMarkKeyDown(input, r)
 		return nil
 	}))
@@ -208,7 +208,7 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 		if !ok {
 			return nil
 		}
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		render.InputMarkKeyUp(input, r)
 		return nil
 	}))
@@ -238,7 +238,7 @@ func domKeyRune(event js.Value) (rune, bool) {
 }
 
 func setMouseButton(engine *ecs.World, button int, pressed bool) {
-	input := ecs.Resource[render.Input](engine)
+	input := ecs.MustResource[render.Input](engine)
 	switch button {
 	case 0:
 		input.LeftDown = pressed

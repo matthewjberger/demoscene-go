@@ -64,9 +64,9 @@ func main() {
 			log.Printf("resize error: %v", err)
 		}
 		viewport := window.ViewportSize{Width: uint32(w), Height: uint32(h)}
-		ecs.Resource[window.Window](worlds.Engine).Viewport = viewport
+		ecs.MustResource[window.Window](worlds.Engine).Viewport = viewport
 		if worlds.UI != nil {
-			ecs.Resource[window.Window](worlds.UI).Viewport = viewport
+			ecs.MustResource[window.Window](worlds.UI).Viewport = viewport
 		}
 	})
 
@@ -110,7 +110,7 @@ func main() {
 
 		render.ProcessPickingReadback(renderer, worlds.Engine)
 
-		if picking := ecs.Resource[*render.Picking](worlds.Engine); (*picking).Result != nil {
+		if picking := ecs.MustResource[*render.Picking](worlds.Engine); (*picking).Result != nil {
 			result := (*picking).Result
 			(*picking).Result = nil
 			handlePickResult(worlds, result.EntityID)
@@ -128,7 +128,7 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	var haveMouse bool
 
 	glfwWindow.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		current := transform.Vec2{float32(x), float32(y)}
 		if haveMouse {
 			input.MouseDelta = input.MouseDelta.Add(current.Sub(previousMouse))
@@ -139,13 +139,13 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	})
 
 	glfwWindow.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, _ glfw.ModifierKey) {
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		pressed := action == glfw.Press
 		switch button {
 		case glfw.MouseButtonLeft:
 			input.LeftDown = pressed
 			if pressed {
-				picking := *ecs.Resource[*render.Picking](engine)
+				picking := *ecs.MustResource[*render.Picking](engine)
 				if picking != nil {
 					render.QueuePick(picking, uint32(input.MousePosition[0]), uint32(input.MousePosition[1]))
 				}
@@ -158,7 +158,7 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	})
 
 	glfwWindow.SetScrollCallback(func(_ *glfw.Window, _, yOffset float64) {
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		input.Wheel += float32(yOffset)
 	})
 
@@ -171,7 +171,7 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 		if !ok {
 			return
 		}
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		switch action {
 		case glfw.Press:
 			render.InputMarkKeyDown(input, r)
@@ -181,7 +181,7 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	})
 
 	glfwWindow.SetCharCallback(func(_ *glfw.Window, char rune) {
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		input.Chars = append(input.Chars, char)
 	})
 }

@@ -140,7 +140,7 @@ func buildWorlds(renderer *render.Renderer) (app.Worlds, *app.App) {
 	if demo.ConfigureRenderGraph != nil {
 		demo.ConfigureRenderGraph(engine, renderer)
 	}
-	primitives := ecs.Resource[render.Primitives](engine)
+	primitives := ecs.MustResource[render.Primitives](engine)
 	initializeWorldEntities(worlds,
 		[]render.MeshHandle{primitives.UnitTriangle, primitives.UnitQuad, primitives.UnitCube},
 		[]string{"Triangle", "Quad", "Cube"},
@@ -411,11 +411,11 @@ func initializeWorldEntities(worlds app.Worlds, meshes []render.MeshHandle, mesh
 		gridSpacing = 1.5
 	)
 
-	lightMask := ecs.MaskOf[transform.LocalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.GlobalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.LocalTransformDirty](worlds.Engine) |
-		ecs.MaskOf[render.Light](worlds.Engine) |
-		ecs.MaskOf[app.Name](worlds.Engine)
+	lightMask := ecs.MustMaskOf[transform.LocalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.GlobalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.LocalTransformDirty](worlds.Engine) |
+		ecs.MustMaskOf[render.Light](worlds.Engine) |
+		ecs.MustMaskOf[app.Name](worlds.Engine)
 
 	sun := worlds.Engine.Spawn(lightMask)
 	sunTransform := transform.IdentityLocalTransform()
@@ -429,14 +429,14 @@ func initializeWorldEntities(worlds app.Worlds, meshes []render.MeshHandle, mesh
 	})
 	ecs.Set(worlds.Engine, sun, app.Name{Value: "Sun"})
 
-	engineMask := ecs.MaskOf[transform.LocalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.GlobalTransform](worlds.Engine) |
-		ecs.MaskOf[transform.LocalTransformDirty](worlds.Engine) |
-		ecs.MaskOf[render.RenderMesh](worlds.Engine) |
-		ecs.MaskOf[app.Name](worlds.Engine)
+	engineMask := ecs.MustMaskOf[transform.LocalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.GlobalTransform](worlds.Engine) |
+		ecs.MustMaskOf[transform.LocalTransformDirty](worlds.Engine) |
+		ecs.MustMaskOf[render.RenderMesh](worlds.Engine) |
+		ecs.MustMaskOf[app.Name](worlds.Engine)
 
-	gameMask := ecs.MaskOf[Spinner](worlds.Game) |
-		ecs.MaskOf[app.EngineEntity](worlds.Game)
+	gameMask := ecs.MustMaskOf[Spinner](worlds.Game) |
+		ecs.MustMaskOf[app.EngineEntity](worlds.Game)
 
 	index := 0
 	for x := -gridExtent; x <= gridExtent; x++ {
@@ -477,10 +477,10 @@ func initializeWorldEntities(worlds app.Worlds, meshes []render.MeshHandle, mesh
 // state is the source of truth; reaching across into the engine world
 // goes through the named sync API.
 func advanceSpinners(game *ecs.World) {
-	delta := ecs.Resource[window.Window](game).Timing.DeltaSeconds
-	engineRef := ecs.Resource[app.EngineRef](game)
+	delta := ecs.MustResource[window.Window](game).Timing.DeltaSeconds
+	engineRef := ecs.MustResource[app.EngineRef](game)
 
-	spinnerMask := ecs.MaskOf[Spinner](game) | ecs.MaskOf[app.EngineEntity](game)
+	spinnerMask := ecs.MustMaskOf[Spinner](game) | ecs.MustMaskOf[app.EngineEntity](game)
 
 	game.ForEach(spinnerMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
 		spinners, _ := ecs.Column[Spinner](game, table)

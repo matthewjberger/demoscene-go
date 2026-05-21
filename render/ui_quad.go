@@ -196,12 +196,12 @@ func uiQuadPrepare(s any, context *PassContext) error {
 	if !ui.HasUI(context.World) {
 		return nil
 	}
-	uiWorld := ecs.Resource[ui.WorldRef](context.World).World
+	uiWorld := ecs.MustResource[ui.WorldRef](context.World).World
 
 	state.scratch = state.scratch[:0]
 	state.scratchZ = state.scratchZ[:0]
-	nodeColorMask := ecs.MaskOf[ui.Node](uiWorld) | ecs.MaskOf[ui.Color](uiWorld)
-	interactiveMask := ecs.MaskOf[ui.Interactive](uiWorld)
+	nodeColorMask := ecs.MustMaskOf[ui.Node](uiWorld) | ecs.MustMaskOf[ui.Color](uiWorld)
+	interactiveMask := ecs.MustMaskOf[ui.Interactive](uiWorld)
 	uiWorld.ForEach(nodeColorMask, 0, func(entity ecs.Entity, table *ecs.Archetype, index int) {
 		nodes, _ := ecs.Column[ui.Node](uiWorld, table)
 		colors, _ := ecs.Column[ui.Color](uiWorld, table)
@@ -235,8 +235,8 @@ func uiQuadPrepare(s any, context *PassContext) error {
 	}
 
 	viewport := uiQuadViewport{
-		Width:  float32(ecs.Resource[RendererResource](context.World).Renderer.Config.Width),
-		Height: float32(ecs.Resource[RendererResource](context.World).Renderer.Config.Height),
+		Width:  float32(ecs.MustResource[RendererResource](context.World).Renderer.Config.Width),
+		Height: float32(ecs.MustResource[RendererResource](context.World).Renderer.Config.Height),
 	}
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.viewportBuffer, 0, bytesOf(&viewport))
 

@@ -15,7 +15,7 @@ func AnyTextInputFocused(world *ecs.World) bool {
 	if !ecs.HasResource[PointerState](world) {
 		return false
 	}
-	pointer := ecs.Resource[PointerState](world)
+	pointer := ecs.MustResource[PointerState](world)
 	if pointer.FocusedEntity.ID == 0 {
 		return false
 	}
@@ -26,7 +26,7 @@ func AnyTextInputFocused(world *ecs.World) bool {
 // AdvanceTextInputs applies a frame's typed characters to the
 // focused [TextInput]. Enter emits [TextCommitted].
 func AdvanceTextInputs(world *ecs.World, chars []rune, backspace, enter bool) {
-	pointer := ecs.Resource[PointerState](world)
+	pointer := ecs.MustResource[PointerState](world)
 	target := pointer.FocusedEntity
 	if target.ID == 0 {
 		return

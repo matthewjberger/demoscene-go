@@ -63,9 +63,9 @@ func main() {
 			log.Printf("resize error: %v", err)
 		}
 		viewport := window.ViewportSize{Width: uint32(w), Height: uint32(h)}
-		ecs.Resource[window.Window](worlds.Engine).Viewport = viewport
+		ecs.MustResource[window.Window](worlds.Engine).Viewport = viewport
 		if worlds.UI != nil {
-			ecs.Resource[window.Window](worlds.UI).Viewport = viewport
+			ecs.MustResource[window.Window](worlds.UI).Viewport = viewport
 		}
 	})
 
@@ -83,7 +83,7 @@ func main() {
 		handleBreakoutUiClicks(worlds)
 		updateBreakoutHud(worlds, delta)
 
-		glfwWindow.SetTitle(titleForState(ecs.Resource[GameState](worlds.Game)))
+		glfwWindow.SetTitle(titleForState(ecs.MustResource[GameState](worlds.Game)))
 
 		switch err := render.RenderFrame(renderer, worlds.Engine); {
 		case err == nil:
@@ -103,13 +103,13 @@ func main() {
 // and R (reset).
 func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	glfwWindow.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		input.MousePosition[0] = float32(x)
 		input.MousePosition[1] = float32(y)
 	})
 
 	glfwWindow.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, _ glfw.ModifierKey) {
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		pressed := action == glfw.Press
 		switch button {
 		case glfw.MouseButtonLeft:
@@ -122,7 +122,7 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 	})
 
 	glfwWindow.SetScrollCallback(func(_ *glfw.Window, _, yOffset float64) {
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		input.Wheel += float32(yOffset)
 	})
 
@@ -135,7 +135,7 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 		if !ok {
 			return
 		}
-		input := ecs.Resource[render.Input](engine)
+		input := ecs.MustResource[render.Input](engine)
 		switch action {
 		case glfw.Press:
 			render.InputMarkKeyDown(input, r)

@@ -13,12 +13,12 @@ import (
 // scene mesh was behind the overlay and changing selection would
 // be wrong.
 func handlePickResult(worlds app.Worlds, pickedID uint32) {
-	gizmo := *ecs.Resource[*render.Gizmos](worlds.Engine)
+	gizmo := *ecs.MustResource[*render.Gizmos](worlds.Engine)
 	if gizmo != nil && gizmo.Dragging {
 		return
 	}
 	if worlds.UI != nil {
-		pointer := ecs.Resource[ui.PointerState](worlds.UI)
+		pointer := ecs.MustResource[ui.PointerState](worlds.UI)
 		if pointer.OverUI {
 			return
 		}
@@ -37,7 +37,7 @@ func applySelection(engine *ecs.World, pickedID uint32) {
 	if pickedID == 0 {
 		return
 	}
-	renderMask := ecs.MaskOf[render.RenderMesh](engine)
+	renderMask := ecs.MustMaskOf[render.RenderMesh](engine)
 	var picked ecs.Entity
 	found := false
 	engine.ForEach(renderMask, 0, func(e ecs.Entity, _ *ecs.Archetype, _ int) {
@@ -64,7 +64,7 @@ func applyEntitySelection(engine *ecs.World, entity ecs.Entity) {
 }
 
 func clearSelection(engine *ecs.World) {
-	selectedMask := ecs.MaskOf[render.Selected](engine)
+	selectedMask := ecs.MustMaskOf[render.Selected](engine)
 	var toDeselect []ecs.Entity
 	engine.ForEach(selectedMask, 0, func(e ecs.Entity, _ *ecs.Archetype, _ int) {
 		toDeselect = append(toDeselect, e)
