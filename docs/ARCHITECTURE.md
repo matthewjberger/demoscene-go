@@ -1,212 +1,121 @@
 # Architecture
 
-indigo is an early data-oriented Go game engine. ECS storage is
-[freecs-go](https://github.com/matthewjberger/freecs-go) (vendored
-inline as `ecs/`). Several design choices, especially the dual-world
-ECS and the render graph shape, are borrowed from
-[nightshade](https://github.com/matthewjberger/nightshade).
+indigo is a data-oriented Go game engine. Everything in the engine is either a plain struct of data, a free function over that data, or a typed handle into a table of those structs. Nothing in the engine is "an object with methods that own business logic." This document explains how the pieces fit, what trade-offs each piece is making, and what each piece refuses to do.
 
-## Principles
+## Storage
 
-- **Data-oriented, not OO.** Data and free functions, never objects
-  with methods that own business logic. Where nightshade's Rust uses
-  traits (`State`, `PassNode`), indigo uses structs whose
-  fields are function values: `Pass{Reads, Writes, State,
-  Prepare, Execute, InvalidateBindGroups, Release}` and
-  `App{Initialize, ConfigureRenderGraph, RunSystems, PreRender}`.
-- **Dual ECS worlds.** An engine world holds rendering data
-  (transforms, RenderMesh, camera, input, graphics settings, lights,
-  window timing). A game world holds game state (e.g. spinners),
-  linked to the engine world via an `app.EngineEntity{Entity}` bridge
-  component. Game systems write back into the engine world only
-  through named `app.SyncEngine...` helpers.
-- **Render graph for rendering.** Passes declare which slot names
-  they read and write. The graph wires slots to resources, topo-sorts
-  passes by their read/write dependencies, decides clear-vs-load
-  based on first-write, and invalidates bind groups when read-slot
-  resource versions change.
-- **Free-function systems, ordered by named schedule.** Engine and
-  game each have an `ecs.Schedule` of named systems with the
-  canonical `func(*World)` signature. Inter-system data flows through
-  ECS resources, not through arguments.
+The `ecs` package is an archetype Entity Component System. Components are plain structs registered against a world. Entities are 64-bit generational handles. The storage lays out each component type as its own contiguous slice and groups entities into tables keyed by the exact set of component types they carry. Iteration walks the table directly through typed columns, which is a packed-memory loop the hardware prefetcher likes.
 
-## Module layout
+Adding or removing a component on an entity migrates that entity to a different table. Migrations are O(component-count-on-the-entity) and rare next to per-frame iteration, so the design pays the migration cost to keep the iteration cost flat. The ceiling is 64 component types per world, which is plenty if you split your data across more than one world.
 
-| Package    | Purpose                                                |
-|------------|--------------------------------------------------------|
-| `ecs/`     | freecs-go vendored inline (archetype ECS, events, schedule). |
-| `transform/` | `LocalTransform`, `GlobalTransform`, `Parent`, dirty propagation. |
-| `window/`  | `Window{Viewport, Timing}` resource, `Advance(timing, delta)`. |
-| `render/`  | Renderer, render graph, passes (mesh, grid, sky, FXAA, present), camera, input, lights, graphics settings. |
-| `app/`     | `App` lifecycle hooks, `EngineEntity` bridge component, `SyncEngine*` helpers. |
-| `cmd/editor/` | Demo entry points (desktop `!js`, wasm `js`), schedule wiring, spinner system. |
-| `cmd/serve/` | Tiny file server for the wasm bundle. |
+Resources are world-scoped singletons keyed by Go type. `type DeltaTime float32` and `type GameTime float32` are distinct slots even though they share the same underlying numeric type. Two flavors of lookup exist for the standard reasons: `Resource[T]` returns `(*T, bool)` for defensive code, `MustResource[T]` panics for code that knows the resource is set.
 
-No package depends on a higher layer. `render` depends on
-`ecs`+`transform`+`window`; `app` depends on `ecs`+`render`+`transform`;
-`cmd/editor` ties everything together.
+Generics carry the typed accessors: `Get[T]`, `Set[T]`, `Resource[T]`, `Iter1..6[T1..T6]`. Everything monomorphizes at compile time, so the iteration body sees a concrete `*Position` and a concrete `*Velocity`, not an `interface{}`. The `Iter` family is templated through a `go:generate` step rather than written by hand.
 
-## ECS
+## Worlds
 
-The `ecs` package is freecs-go renamed. Conventions:
+The engine ships three worlds, not one.
 
-- Components are plain structs, registered with
-  `ecs.Register[MyComponent](world)`. Up to 64 component types per
-  world (so we use two worlds).
-- Resources are keyed by Go type. Named types
-  (`type DeltaTime float32`) give each scalar its own slot.
-- Systems are free functions with signature `func(*ecs.World)`.
-  Push them onto an `ecs.Schedule` and call `schedule.Run(world)`.
-- Hot iteration uses `world.ForEach(mask, exclude, callback)` with
-  `ecs.Column[T](world, table)` for direct typed column access.
-- `ecs.EntityDespawned` is a built-in event emitted from `Despawn`;
-  the mesh pass consumes it to release per-entity slot allocations
-  in O(despawned) rather than scanning every slot.
+The **engine world** holds rendering data. Transforms, mesh handles, materials, lights, the camera, input, the renderer handle itself, graphics settings, the window's viewport and timing. Anything a render pass reads lives here.
 
-## Dual-world bridge
+The **game world** holds gameplay data. The breakout demo's paddle, ball, bricks, and game state live in the game world. The editor's spinner system lives there too. Gameplay code reads and writes the game world freely; cross-world reach goes through named sync helpers like `app.SyncEngineTransform`, not through scattered `EngineRef.World.Mutate(...)` calls. The discipline is "go through a named bridge or don't reach."
 
-Game-side entities link to engine-side entities via
-`app.EngineEntity{Entity}`. The spinner demo is the live example:
-each spinner game entity carries an `EngineEntity` pointing at its
-mesh-rendering twin in the engine world. `advanceSpinners` walks the
-game world's `(Spinner | EngineEntity)` archetype with `ForEach`,
-updates the game-side rotation, then writes the result through
-`app.SyncEngineRotation` (which mutates the engine
-`LocalTransform` and marks it dirty). Direct cross-world mutation is
-convention-only; the discipline is "go through `SyncEngine*` or
-nothing."
+The **UI world** is a third instance reserved for retained-UI state: nodes, colors, text, parents, hit-test rects, focus, text-input buffers. The layout system and the hit-test system are systems on this world; the renderer's UI passes iterate this world's components like any other render pass iterates the engine world's. Treating the UI as a regular ECS world means it gets every property the rest of the engine has — query iteration, change detection, command buffers — without a parallel scene graph.
+
+Cross-world bridges are typed resources installed at construction time. `ui.WorldRef` on the engine world points the renderer at the UI world. `app.EngineRef` on the game world points sync helpers at the engine world. `app.NewWorlds(renderer)` constructs all three together and installs both bridges, so a hand-built app cannot silently forget one.
 
 ## Render graph
 
-The Go render graph keeps the fundamentals of nightshade's:
+The renderer is a declarative pass DAG, not a hardcoded sequence of draws.
 
-- `ResourceID` handles into a flat descriptor / handle / version
-  table.
-- Resource kinds: external / transient × color / depth. External
-  resources are refreshed by the caller each frame (the swapchain
-  view); transients are owned by the graph and (re)allocated on
-  resize.
-- `Pass` is a struct of function-value fields plus declared
-  `Reads` / `Writes` slot lists and opaque `State`. The graph never
-  dispatches through an interface; the `State any` field is cast at
-  the top of each pass function.
-- `Compile(device)` builds a dependency DAG from each pass's Reads
-  and Writes (readers depend on the latest writer of their resource;
-  write-after-write preserves insertion order), topologically sorts
-  with Kahn's algorithm (insertion-order tiebreak for stability),
-  records the first-write clear-ops, and auto-allocates any
-  transients whose handles are still empty.
-- `Execute` runs every pass in topo order. Before each pass it
-  compares only the pass's *read*-slot resource versions against a
-  per-pass snapshot; on any mismatch it calls
-  `Pass.InvalidateBindGroups` so cached bind groups referencing
-  stale views get rebuilt. Write-only attachments do not trigger
-  invalidation.
-- `PassContext` holds device, queue, encoder, the ECS world, the
-  resource table, this pass's slot bindings, and the clear-ops
-  set. Helpers return fully-prepared
-  `wgpu.RenderPassColorAttachment` / `RenderPassDepthStencilAttachment`
-  structs ready to drop into a render-pass descriptor.
-
-### Default graph layout
-
-`render.NewRenderer` registers three resources: a transient
-`scene_color` (surface format, render-attachment + texture-binding +
-copy-src), a transient `depth`, and an external `swapchain` that the
-caller refreshes each frame. Three mesh primitives (`UnitTriangle`,
-`UnitQuad`, `UnitCube`) are registered in the mesh-asset registry
-and exposed via `Renderer.UnitTriangle` / `UnitQuad` / `UnitCube`.
-
-The demo's `ConfigureRenderGraph` adds a fourth transient
-(`fxaa_output`) and five passes; the topo sort orders them as:
-
-```
-sky ──► scene_color
-mesh ──► scene_color, depth
-grid ──► scene_color, depth          (loads, no clear)
-fxaa: scene_color ──► fxaa_output
-present: fxaa_output ──► swapchain
-```
-
-The sky pass is the first writer of scene_color so it gets the
-clear-on-load op; the mesh and grid passes load and overwrite the
-pixels they cover. The FXAA pass samples scene_color into
-fxaa_output; the present pass blits fxaa_output to the swapchain.
-
-### Adding a pass
+A pass is a struct of function values plus a slot manifest:
 
 ```go
-myPass, _ := render.NewMyPass(device, format)
-renderer.Graph.AddPass(myPass, []render.SlotBinding{
-    {Slot: "input",  ResourceID: someTransientID},
-    {Slot: "output", ResourceID: anotherTransientID},
-})
+type Pass struct {
+    Name     string
+    Reads    []string
+    Writes   []string
+    State    any
+    Prepare  func(state any, ctx *PassContext) error
+    Execute  func(state any, ctx *PassContext) error
+    Release  func(state any)
+    InvalidateBindGroups func(state any)
+}
 ```
 
-`Compile(device)` after the application's `ConfigureRenderGraph`
-sorts everything and allocates any new transients.
+Apps build passes (`render.AddSkyPass`, `render.AddMeshPass`, ...) and bind their `Reads` / `Writes` slot names to typed resource IDs. `Compile` topologically sorts the passes by their dependencies, allocates any transient textures whose handles are still empty, decides clear-vs-load by who writes first, and freezes an execution order. `RenderFrame` then walks the sorted list every frame and invokes each pass's `Prepare` then `Execute`.
 
-### Deliberately deferred
+The slot indirection means a pass's source code references "color" and "depth" without baking in which concrete textures they map to. A new app can construct its own slot wiring without touching the pass implementation. Adding a pass is one function call plus a slot manifest.
 
-- Transient aliasing pool. Each transient is its own texture today;
-  nightshade reuses textures with compatible descriptors.
-- Dead-pass culling.
-- Subgraphs (nightshade uses these for per-camera viewport
-  rendering).
-- Buffer resources (only textures today).
+Bind groups are version-tracked. Resources stamp a counter every time their underlying handle changes (transient reallocations on resize, external view replacement each frame). A pass records the version it cached its bind groups against; on a mismatch the pass's `InvalidateBindGroups` runs and rebuilds them. Write-only attachments don't trigger invalidation, so a pass that writes to the swapchain doesn't rebuild on every present.
 
-## Shading
+Pass state is `any`. The pass implementation casts at the top of each function. This is the Go-shaped way to type-erase heterogeneous pass states stored in a slice; the cast costs one type assertion per call and keeps the data fully separate from the behavior.
 
-The mesh pass binds three bind groups:
+## Systems
 
-- group 0: view-projection uniform
-- group 1: per-handle storage buffer of model matrices (sparse-
-  updated via `ecs.IterChanged1[transform.GlobalTransform]`, with
-  stable per-entity slots)
-- group 2: lights uniform (up to `render.MaxLights` packed
-  `LightData` entries with vec3 alignment padding matching the WGSL
-  struct)
+A system is a free function with signature `func(*ecs.World)`. Systems read and write components and resources through the typed generics, never through method calls on the world. They are ordered through a named schedule:
 
-The fragment shader derives a flat normal from `dpdx`/`dpdy` of the
-world-space varying and applies Lambertian shading per light on top
-of an ambient floor. Light direction comes from the entity transform's
--Z column (glTF KHR_lights_punctual convention, matching nightshade).
-
-## Frame lifecycle
-
-```
-glfw window + wgpu instance + surface
-└── render.NewRenderer
-    ├── default graph (scene_color, depth, swapchain)
-    └── primitive registry (unit_triangle, unit_quad, unit_cube)
-
-ecs.New()  ×2  (engine + game)
-└── register components, install resources
-    (window, renderer, camera, input, pan-orbit controller,
-     graphics settings, propagation state, mesh assets, ...)
-
-app.ConfigureRenderGraph
-└── add transients + passes, then graph.Compile(device)
-
-each frame:
-  glfw.PollEvents + delta computation
-  window.Advance(timing, delta)   on both worlds
-  gameSchedule.Run(game)          spinner system
-  engineSchedule.Run(engine)      graphics_toggles, pan_orbit_camera,
-                                  transform_propagation
-  app.RunSystems / PreRender      (optional, both nil for the demo)
-  world.ApplyCommands + Step      on both worlds
-  Input.BeginFrame                clear per-frame deltas
-  renderer.RenderFrame(engine)    set swapchain external, execute graph,
-                                  present
+```go
+worlds.EngineSchedule.Push("graphics_toggles", render.UpdateGraphicsToggles)
+worlds.EngineSchedule.Push("pan_orbit_camera", render.UpdatePanOrbitCamera)
+worlds.EngineSchedule.Push("transform_propagation", transform.UpdateGlobalTransforms)
 ```
 
-## Why a struct of functions instead of a `PassNode` interface
+The schedule runs the systems in insertion order each frame. Inter-system data flows through the world's resources (a system writes a resource, the next system reads it) rather than through arguments, which keeps every system's signature identical and trivial to test in isolation.
 
-In nightshade, `PassNode` is a trait with `&mut self` methods. In Go
-the equivalent would be an interface with methods on a concrete
-struct that owns the pass's GPU state. That works, but it conflates
-the pass's data (pipeline, buffers, bind groups) with its behavior
-(prepare + execute funcs). The data-oriented split lifts behavior to
-function values and keeps state purely as fields. Passes compose by
-swapping function pointers, not by overriding methods.
+There are no method overrides, no virtual dispatch through interfaces in the systems layer, and no "system manager." A schedule is a slice of named function values plus a `Run(*World)` method. The named entries exist for tracing and for the schedule to refuse duplicates.
+
+## Asset pipeline
+
+Mesh, texture, and glTF loading sit on three typed caches on the engine world.
+
+`MeshAssets` registers vertex buffers and returns `MeshHandle` indices. Every registered mesh carries its local-space AABB so the bounding-volume overlay and any spatial query can read bounds without re-walking vertices.
+
+`TextureCache` registers GPU textures with full mip chains. Callers pick `TextureSRGB` or `TextureLinear` at register time so base color and emissive maps land in sRGB while normal, metallic-roughness, and occlusion maps stay linear. A 1x1 white texture is registered by default and bound to every mesh handle that hasn't been given a real texture, so the shader's `textureSample` call always has a valid binding.
+
+`LoadGltfReader` parses a `.glb` or `.gltf` document, uploads every primitive into the mesh cache, decodes embedded PNG / JPEG images into the texture cache (with auto-classification by sRGB vs linear, based on which material slot references each texture), and returns a `LoadedScene` that mirrors the glTF node hierarchy. `SpawnLoadedScene` materializes the scene as ECS entities with `transform.Parent` links so the engine's transform propagation handles world matrices automatically.
+
+The load step is pure CPU work that produces a `LoadedScene`. The spawn step takes that scene and writes ECS entities. The split means an app can inspect or transform the loaded data before any entity is spawned, or swap in its own spawner with different defaults.
+
+## Frame
+
+A frame is procedural, written out in the platform layer. There is no `engine.Run()` that takes control.
+
+```
+glfw.PollEvents
+compute delta
+sync UI pointer state from the raw input snapshot
+refresh HUD layout, consume tree-scroll wheel
+
+TickFrame(worlds, app, delta)
+  window.Advance on each world's timing
+  UI schedule, then game schedule, then engine schedule
+  app.RunSystems, app.PreRender (optional)
+  ApplyCommands on each world
+
+handle right-click, drive text inputs, handle UI clicks
+refresh per-frame HUD state (menus, hovers, tree, inspector, caret)
+
+renderer.RenderFrame(engine)
+  set swapchain external resource
+  execute compiled graph passes in topo order
+  present
+
+ProcessPickingReadback, handle any pending pick result
+PostFrame
+  Step on each world (rolls events + change-detection watermarks)
+  Input.BeginFrame (clears per-frame deltas)
+```
+
+Reading the file tells you what runs each frame, in what order, without inheriting from a base class.
+
+## Tradeoffs the design refuses
+
+The engine deliberately stays narrow in places it could grow:
+
+- The mesh pass currently binds one base-color texture per mesh handle. Multi-material glTF meshes lose their normal / metallic-roughness textures at draw time even though the loader captured them. A future PBR pass picks the slack back up.
+- Animation data is captured by the glTF loader but no system samples it yet. `AnimationClip` and `AnimationChannel` data sit on `LoadedScene.Animations` waiting for an `AnimationPlayer` component + system.
+- Transient textures aren't aliased. Each transient is its own GPU texture today. A pooling layer would save memory on large graphs but isn't load-bearing for the size of graphs the engine runs.
+- There's no skinning or tangent generation. Meshes that ship with TANGENT attributes pass through; meshes without one don't get an auto-generated tangent basis. A normal-mapped shader needs that work first.
+
+These are scope decisions, not regressions. The point of writing them down is so the engine's shape stays honest about what it does and doesn't promise.
