@@ -723,27 +723,6 @@ func accessorVec4(doc *gltf.Document, acc *gltf.Accessor, out [][4]float32) erro
 	return nil
 }
 
-func accessorMat4(doc *gltf.Document, acc *gltf.Accessor, out [][4][4]float32) error {
-	raw, err := accessorBytes(doc, acc)
-	if err != nil {
-		return err
-	}
-	const matBytes = 64
-	if len(raw) < int(acc.Count)*matBytes {
-		return fmt.Errorf("mat4 accessor expects 64 bytes per element")
-	}
-	for i := 0; i < acc.Count; i++ {
-		base := i * matBytes
-		for col := 0; col < 4; col++ {
-			for row := 0; row < 4; row++ {
-				offset := base + col*16 + row*4
-				out[i][col][row] = math.Float32frombits(binary.LittleEndian.Uint32(raw[offset : offset+4]))
-			}
-		}
-	}
-	return nil
-}
-
 func decodeGltfImage(doc *gltf.Document, img *gltf.Image, baseDir string) ([]byte, uint32, uint32, error) {
 	raw, err := imageBytes(doc, img, baseDir)
 	if err != nil {

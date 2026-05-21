@@ -8,4 +8,4 @@ require (
 	github.com/go-gl/mathgl v1.2.0
 )
 
-require github.com/qmuntal/gltf v0.28.0 // indirect
+require github.com/qmuntal/gltf v0.28.0
