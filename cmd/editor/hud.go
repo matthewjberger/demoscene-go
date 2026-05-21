@@ -53,6 +53,17 @@ func (c *HudContext) setColor(entity ecs.Entity, rgba [4]float32) {
 	}
 }
 
+// caretBlinkPeriodSeconds is the half-period of the text-input
+// caret blink: the caret is visible for one period and hidden for
+// the next, so the full cycle is 2 * caretBlinkPeriodSeconds.
+const caretBlinkPeriodSeconds = 0.5
+
+// caretVisible reports whether the blinking caret should be drawn
+// this frame given the engine uptime in seconds.
+func caretVisible(uptime float32) bool {
+	return int(uptime/caretBlinkPeriodSeconds)%2 == 0
+}
+
 func syncUiPointer(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
@@ -667,9 +678,9 @@ func (c *HudContext) updateInspectorCaret() {
 	caretNode.Height = glyphH
 	caretNode.Resolved = ui.Rect{X: caretX, Y: caretY, Width: caretNode.Width, Height: glyphH}
 	uptime := ecs.MustResource[window.Window](c.Engine).Timing.UptimeSeconds
-	alpha := float32(1)
-	if int(uptime/0.5)%2 == 1 {
-		alpha = 0
+	alpha := float32(0)
+	if caretVisible(uptime) {
+		alpha = 1
 	}
 	caretColor.RGBA = [4]float32{0.95, 0.96, 0.98, alpha}
 }

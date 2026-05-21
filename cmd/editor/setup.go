@@ -164,12 +164,23 @@ func loadDefaultGltf(engine *ecs.World, renderer *render.Renderer, path string) 
 	if _, err := os.Stat(path); err != nil {
 		return
 	}
+	if _, err := loadGltfInto(engine, renderer, path); err != nil {
+		log.Printf("gltf load failed: %v", err)
+	}
+}
+
+// loadGltfInto loads path via [render.LoadGltfFile], spawns its
+// nodes via [render.SpawnLoadedScene], and attaches an [app.Name]
+// component to every spawned entity (falling back to
+// "<basename>/node_<index>" when the glTF node has no name).
+// Returns the spawned entities in node-index order so the caller
+// can attach further per-entity state (selection, etc.).
+func loadGltfInto(engine *ecs.World, renderer *render.Renderer, path string) ([]ecs.Entity, error) {
 	assets := ecs.MustResource[render.MeshAssetsResource](engine).Assets
 	cache := ecs.MustResource[render.TextureCacheResource](engine).Cache
 	scene, err := render.LoadGltfFile(renderer.Device, renderer.Queue, assets, cache, path)
 	if err != nil {
-		log.Printf("gltf load failed: %v", err)
-		return
+		return nil, err
 	}
 	entities := render.SpawnLoadedScene(engine, scene)
 	baseName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
@@ -182,6 +193,12 @@ func loadDefaultGltf(engine *ecs.World, renderer *render.Renderer, path string) 
 		engine.AddComponents(e, nameMask)
 		ecs.Set(engine, e, app.Name{Value: label})
 	}
+	log.Printf("gltf loaded: %s (%d nodes, %d meshes, %d materials, %d animations)",
+		path, len(scene.Nodes), len(scene.Meshes), len(scene.Materials), len(scene.Animations))
+	if len(scene.Roots) > 0 {
+		applyEntitySelection(engine, entities[scene.Roots[0]])
+	}
+	return entities, nil
 }
 
 // editorApp wires the editor's render pipeline: sky -> mesh -> grid
