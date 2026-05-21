@@ -53,12 +53,6 @@ func (c *HudContext) setColor(entity ecs.Entity, rgba [4]float32) {
 	}
 }
 
-func (c *HudContext) setTextAlpha(entity ecs.Entity, alpha float32) {
-	if t, ok := ecs.GetMut[ui.Text](c.UI, entity); ok {
-		t.Color[3] = alpha
-	}
-}
-
 func syncUiPointer(worlds app.Worlds) {
 	if worlds.UI == nil {
 		return
@@ -382,48 +376,6 @@ func (c *HudContext) refreshMenuPopups() {
 	setMenuVisible(c.UI, c.Hud.EditMenu, c.Hud.OpenMenu == menuEditOpen)
 	setMenuVisible(c.UI, c.Hud.ViewMenu, c.Hud.OpenMenu == menuViewOpen)
 	setMenuVisible(c.UI, c.Hud.ContextMenu, c.Hud.OpenMenu == menuContextOpen)
-	c.occludeTreeTextBehindPopup()
-}
-
-func (c *HudContext) occludeTreeTextBehindPopup() {
-	var popup *menuPopup
-	switch c.Hud.OpenMenu {
-	case menuFileOpen:
-		popup = &c.Hud.FileMenu
-	case menuEditOpen:
-		popup = &c.Hud.EditMenu
-	case menuViewOpen:
-		popup = &c.Hud.ViewMenu
-	}
-	var popupRect ui.Rect
-	hasPopup := false
-	if popup != nil {
-		if node, ok := ecs.Get[ui.Node](c.UI, popup.Panel); ok {
-			popupRect = node.Resolved
-			hasPopup = popupRect.Width > 0 && popupRect.Height > 0
-		}
-	}
-	apply := func(entity ecs.Entity) {
-		if entity.ID == 0 {
-			return
-		}
-		nodeRef, ok := ecs.Get[ui.Node](c.UI, entity)
-		if !ok {
-			return
-		}
-		hidden := hasPopup &&
-			nodeRef.Resolved.Y < popupRect.Y+popupRect.Height &&
-			nodeRef.Resolved.Y+nodeRef.Resolved.Height > popupRect.Y
-		if hidden {
-			c.setTextAlpha(entity, 0)
-		} else {
-			c.setTextAlpha(entity, 1)
-		}
-	}
-	apply(c.Hud.TreeTitle)
-	for _, row := range c.Hud.TreeRows {
-		apply(row)
-	}
 }
 
 func (c *HudContext) refreshInteractiveHovers() {
@@ -714,7 +666,12 @@ func (c *HudContext) updateInspectorCaret() {
 	caretNode.Y = caretY
 	caretNode.Height = glyphH
 	caretNode.Resolved = ui.Rect{X: caretX, Y: caretY, Width: caretNode.Width, Height: glyphH}
-	caretColor.RGBA = [4]float32{0.95, 0.96, 0.98, 1}
+	uptime := ecs.MustResource[window.Window](c.Engine).Timing.UptimeSeconds
+	alpha := float32(1)
+	if int(uptime/0.5)%2 == 1 {
+		alpha = 0
+	}
+	caretColor.RGBA = [4]float32{0.95, 0.96, 0.98, alpha}
 }
 
 func formatVec3(v transform.Vec3) string {

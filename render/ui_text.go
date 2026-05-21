@@ -234,6 +234,8 @@ func uiTextPrepare(s any, context *PassContext) error {
 	cellW := float32(state.atlas.GlyphWidth)
 	cellH := float32(state.atlas.GlyphHeight)
 
+	occluders := collectOpaqueQuads(uiWorld)
+
 	state.scratch = state.scratch[:0]
 	var batches []textGlyphBatch
 
@@ -243,6 +245,9 @@ func uiTextPrepare(s any, context *PassContext) error {
 		node := &nodes[index]
 		text := &texts[index]
 		if text.Content == "" || !visibleInClip(node) {
+			return
+		}
+		if textCovered(node.Resolved, node.ZIndex, occluders) {
 			return
 		}
 		scale := text.Scale
@@ -321,6 +326,56 @@ func uiTextExecute(s any, context *PassContext) error {
 	pass.End()
 	pass.Release()
 	return nil
+}
+
+// opaqueQuad is the screen-space rect + Z of an opaque UI quad that
+// can hide lower-Z text behind it. Built once per frame so each text
+// element doesn't re-query the world.
+type opaqueQuad struct {
+	rect ui.Rect
+	z    int32
+}
+
+// collectOpaqueQuads returns every node with Color alpha >= 1 that
+// has visible bounds. Text whose node Z is below an opaque quad's Z
+// and whose bounds are fully inside that quad is skipped by the
+// text pass (so popup panels actually cover labels behind them).
+func collectOpaqueQuads(uiWorld *ecs.World) []opaqueQuad {
+	mask := ecs.MustMaskOf[ui.Node](uiWorld) | ecs.MustMaskOf[ui.Color](uiWorld)
+	var out []opaqueQuad
+	uiWorld.ForEach(mask, 0, func(entity ecs.Entity, table *ecs.Archetype, index int) {
+		nodes, _ := ecs.Column[ui.Node](uiWorld, table)
+		colors, _ := ecs.Column[ui.Color](uiWorld, table)
+		node := &nodes[index]
+		color := &colors[index]
+		if color.RGBA[3] < 0.999 {
+			return
+		}
+		if node.Resolved.Width <= 0 || node.Resolved.Height <= 0 {
+			return
+		}
+		out = append(out, opaqueQuad{rect: node.Resolved, z: node.ZIndex})
+	})
+	return out
+}
+
+// textCovered reports whether textBounds (at textZ) is fully covered
+// by some opaque quad with a strictly higher Z. Used by the text
+// pass to skip glyphs that would render through a popup background.
+func textCovered(textBounds ui.Rect, textZ int32, occluders []opaqueQuad) bool {
+	for i := range occluders {
+		q := &occluders[i]
+		if q.z <= textZ {
+			continue
+		}
+		if textBounds.X >= q.rect.X &&
+			textBounds.Y >= q.rect.Y &&
+			textBounds.X+textBounds.Width <= q.rect.X+q.rect.Width &&
+			textBounds.Y+textBounds.Height <= q.rect.Y+q.rect.Height {
+			return true
+		}
+	}
+	return false
 }
 
 func sortTextBatches(scratch []uiTextGlyphInstance, batches []textGlyphBatch) {
