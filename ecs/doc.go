@@ -1,3 +1,5 @@
+//go:generate go run ../internal/gen_iter
+
 // Package ecs is the data-oriented Entity Component System used by indigo.
 //
 // It is a verbatim copy of the freecs-go library, renamed to "ecs" so the
