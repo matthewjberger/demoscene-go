@@ -44,10 +44,9 @@ type gridPassState struct {
 // pass reads scene_color + depth, depth-tests against existing
 // geometry (no depth write), and alpha-blends on top.
 //
-// Ported from nightshade's GridPass + grid.wgsl. nightshade uses
-// reverse-Z, so its depth state is GreaterEqual / clear 0.0; we use
-// standard-Z (Less / clear 1.0), so the grid uses LessEqual to draw
-// where the depth buffer is at or beyond the grid's depth.
+// Uses standard-Z (Less / clear 1.0) with LessEqual on the grid
+// pipeline so the lines draw where the depth buffer is at or
+// beyond the grid's depth.
 func NewGridPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect func() float32) (*render.Pass, error) {
 	state := &gridPassState{aspectFn: aspect}
 

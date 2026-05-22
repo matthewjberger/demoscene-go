@@ -1,16 +1,15 @@
-// Package render owns the WGPU device, surface, and render graph for the
-// engine. The data-oriented analogue of nightshade's WgpuRenderer: one
-// value lives as a resource on the ECS world and is consulted by passes
-// and by the main loop.
+// Package render owns the WGPU device, surface, and render graph
+// for the engine. One [Renderer] value lives as a resource on the
+// ECS world and is consulted by passes and the main loop.
 //
-// The graph design is the nightshade fundamentals (declarative resources,
-// passes that read/write named slots, a compile step that decides
-// clear-vs-load, version stamps that drive bind-group invalidation, the
-// ECS world threaded through PassContext) ported to Go. The default graph
-// is wired in the same shape as nightshade's: passes write color into a
-// transient scene_color target; a final present pass blits scene_color to
-// the external swapchain. Future passes (bloom, SSAO, OIT) chain between
-// scene_color and the present pass without changes here.
+// Render-graph design: declarative resources, passes that read /
+// write named slots, a compile step that decides clear-vs-load,
+// version stamps that drive bind-group invalidation, the ECS world
+// threaded through [PassContext]. The default graph wires passes
+// to write color into a transient scene_color target; a final
+// present pass blits scene_color to the external swapchain. Future
+// passes (bloom, SSAO, OIT) chain between scene_color and the
+// present pass without changes here.
 package render
 
 import (
@@ -21,8 +20,7 @@ import (
 	"indigo/ecs"
 )
 
-// DepthFormat is the depth target the renderer creates. Chosen to match
-// the nightshade engine so future passes can be ported as-is.
+// DepthFormat is the depth target the renderer creates.
 const DepthFormat = wgpu.TextureFormatDepth32Float
 
 // Renderer owns the long-lived WGPU surface/device/queue plus the
@@ -104,9 +102,10 @@ func NewRenderer(instance *wgpu.Instance, surface *wgpu.Surface, width, height u
 // scene_color into it). It does not register any passes; the application
 // adds those in its configure-render-graph hook.
 //
-// scene_color's format matches the surface so the final present pass can
-// blit without a tonemap. Once the engine grows HDR + tonemapping this
-// should switch to wgpu.TextureFormatRGBA16Float, matching nightshade.
+// scene_color's format matches the surface so the final present
+// pass can blit without a tonemap. Once a dedicated postprocess
+// pass owns exposure + tonemap, this should switch to
+// wgpu.TextureFormatRGBA16Float for HDR shading.
 func defaultGraph(surfaceFormat wgpu.TextureFormat, width, height uint32) *Graph {
 	graph := NewGraph()
 	clearColor := wgpu.Color{R: 0.19, G: 0.24, B: 0.42, A: 1.0}

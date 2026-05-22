@@ -14,11 +14,10 @@ var clusterBoundsShader string
 //go:embed cluster_light_assign.wgsl
 var clusterLightAssignShader string
 
-// Cluster grid layout matches nightshade exactly: 16x9x24 = 3456
-// clusters tiling the camera frustum, with up to 256 local lights
-// per cluster. Directional lights live at the front of the lights
-// buffer and skip cluster culling entirely (they're iterated by
-// every fragment).
+// Cluster grid layout: 16x9x24 = 3456 clusters tiling the camera
+// frustum, with up to 256 local lights per cluster. Directional
+// lights live at the front of the lights buffer and skip cluster
+// culling entirely (they're iterated by every fragment).
 const (
 	ClusterGridX        uint32 = 16
 	ClusterGridY        uint32 = 9
@@ -28,8 +27,7 @@ const (
 )
 
 // MaxLightsBuffer is the upper bound on lights uploaded into the
-// global lights storage buffer each frame. Mirrors nightshade's
-// MAX_LIGHTS constant.
+// global lights storage buffer each frame.
 const MaxLightsBuffer uint32 = 1024
 
 // ClusterUniforms is the std140-equivalent uniform layout the
@@ -57,19 +55,20 @@ type ClusterBounds struct {
 }
 
 // LightGrid holds the per-cluster count of intersecting local
-// lights. Mirrors nightshade's LightGrid; offset is unused (the
-// fragment shader reads light_indices[cluster_idx *
-// MaxLightsPerCluster + i] for i in [0, count)) but kept so the
-// WGSL struct layout matches verbatim.
+// lights. The offset field is unused (the fragment shader reads
+// light_indices[cluster_idx * MaxLightsPerCluster + i] for i in
+// [0, count)) but kept so the WGSL struct layout stays
+// 16-byte-aligned and a future per-cluster offset table doesn't
+// require a struct migration.
 type LightGrid struct {
 	Offset uint32
 	Count  uint32
 }
 
 // LightGPU is the std430 GPU layout of one entry in the lights
-// storage buffer. 80 bytes; matches nightshade's LightData
-// exactly so the cluster_light_assign shader can be lifted
-// without remapping fields.
+// storage buffer. 80 bytes. Field order matches the WGSL Light
+// struct in cluster_light_assign.wgsl + mesh.wgsl so the GPU
+// can read the buffer without offset shuffling.
 type LightGPU struct {
 	Position    [4]float32
 	Direction   [4]float32

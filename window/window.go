@@ -3,11 +3,10 @@
 // on wasm) writes into a [Window] resource stored on the ECS world;
 // systems read from the same resource.
 //
-// Ported from nightshade's `ecs::window::resources::Window` and
-// `WindowTiming`, stripped of the OO surface area: only the data
-// fields and a single free [Advance] function. No methods, no
-// hidden state, no platform handles. The platform layer owns the
-// actual OS window and feeds this resource each frame.
+// Only the data fields and a single free [Advance] function — no
+// methods, no hidden state, no platform handles. The platform
+// layer owns the actual OS window and feeds this resource each
+// frame.
 package window
 
 // ViewportSize is the surface's pixel dimensions. Updated on resize.
@@ -17,8 +16,7 @@ type ViewportSize struct {
 }
 
 // Timing captures per-frame timing data. Updated by [Advance] from
-// the platform main loop's delta. Mirrors nightshade's WindowTiming
-// (frames_per_second, delta_time, uptime_milliseconds, frame counter).
+// the platform main loop's delta.
 type Timing struct {
 	DeltaSeconds  float32
 	UptimeSeconds float32

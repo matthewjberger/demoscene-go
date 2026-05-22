@@ -3,7 +3,7 @@ package render
 import "indigo/transform"
 
 // LightType picks one of the three light shapes from glTF's
-// KHR_lights_punctual, matching nightshade's enum.
+// KHR_lights_punctual extension.
 type LightType uint32
 
 const (
@@ -14,15 +14,13 @@ const (
 
 // Light is the ECS component attached to entities that emit light.
 // The entity's [transform.GlobalTransform] supplies position (for
-// point/spot) and direction (for directional/spot via the -Z column
-// of the transform's rotation), matching the glTF convention
-// nightshade uses.
+// point/spot) and direction (for directional/spot via the -Z
+// column of the transform's rotation), matching the glTF convention.
 //
 // Color is linear RGB; intensity is a scalar multiplier on top of
-// the color. Range gates point/spot attenuation; cone angles control
-// spot falloff (unused for directional lights). cast_shadows et al.
-// from nightshade are dropped for the slice; our mesh pass doesn't
-// have shadows yet.
+// the color. Range gates point/spot attenuation; cone angles
+// control spot falloff (unused for directional lights). No
+// shadow-casting fields yet — the mesh pass doesn't render shadows.
 type Light struct {
 	Type           LightType
 	Color          transform.Vec3

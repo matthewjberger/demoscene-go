@@ -38,7 +38,7 @@ func initializeWorldEntities(worlds app.Worlds, meshes []asset.MeshHandle, meshN
 		ecs.MustMaskOf[render.Light](worlds.Engine) |
 		ecs.MustMaskOf[app.Name](worlds.Engine)
 
-	// Matches nightshade's spawn_sun: positioned above-right, rotated
+	// Default sun: positioned above-right, rotated
 	// PI/4 yaw + -PI/6 pitch so the directional light angles down at
 	// the scene from the side, warm white color, intensity 5.
 	sun := worlds.Engine.Spawn(lightMask)

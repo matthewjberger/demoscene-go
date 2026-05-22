@@ -16,8 +16,8 @@ import (
 // the material references (bits 16-19) and applied in the shader
 // at sample time.
 //
-// Mirrors nightshade's material_texture_arrays.rs (1024x1024x256,
-// 16x anisotropic, sRGB/linear pair, name-keyed deduplication).
+// Default layout: 1024x1024x256, 16x anisotropic, sRGB/linear
+// pair, name-keyed deduplication.
 type MaterialTextureArrays struct {
 	LayerSize uint32
 	MaxLayers uint32
@@ -48,9 +48,7 @@ const NoTextureLayer uint32 = 0xFFFFFFFF
 
 // WrapMode codes packed into the upper bits of a layer value.
 // Lower 16 bits hold the layer index; bits 16-17 hold the U wrap
-// mode, bits 18-19 hold V. Encoding matches nightshade's
-// SamplerWrap -> u32 mapping so a shader port doesn't have to
-// remap.
+// mode, bits 18-19 hold V.
 type WrapMode uint8
 
 const (
@@ -68,8 +66,8 @@ func PackLayer(layer uint32, wrapU, wrapV WrapMode) uint32 {
 }
 
 // NewMaterialTextureArrays allocates the two texture arrays with
-// nightshade's default 1024x1024x256 layout. Apps that need
-// different limits can construct via [NewMaterialTextureArraysWith].
+// the default 1024x1024x256 layout. Apps that need different
+// limits can construct via [NewMaterialTextureArraysWith].
 func NewMaterialTextureArrays(device *wgpu.Device) (*MaterialTextureArrays, error) {
 	return NewMaterialTextureArraysWith(device, 1024, 256)
 }

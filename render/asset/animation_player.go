@@ -19,9 +19,9 @@ import (
 // resulting translation / rotation / scale into the targeted
 // node's LocalTransform.
 //
-// Scope mirrors nightshade's AnimationPlayer minus skinning and
-// cross-fade: a single clip plays at a time, looping is per-player,
-// stopping at the end is the alternative.
+// Scope: a single clip plays at a time, looping is per-player,
+// stopping at the end is the alternative. No skinning or cross-
+// fade yet.
 type AnimationPlayer struct {
 	Clips             []AnimationClip
 	CurrentClip       int
@@ -165,8 +165,8 @@ func sampleChannelInto(world *ecs.World, target ecs.Entity, channel *AnimationCh
 // findKeyframe returns the indices of the keyframes bracketing t
 // plus the interpolation factor in [0, 1]. Times must be sorted
 // ascending (glTF guarantees this for AnimationSampler input
-// accessors). Linear scan matches nightshade — clips have tens of
-// keyframes typically, a binary search isn't worth the complexity.
+// accessors). Linear scan — clips have tens of keyframes typically,
+// a binary search isn't worth the complexity.
 func findKeyframe(times []float32, t float32) (int, int, float32) {
 	if len(times) == 0 {
 		return 0, 0, 0

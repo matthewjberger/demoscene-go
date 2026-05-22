@@ -3,7 +3,7 @@
 // given (NdotV, roughness) pair: the R + G channels feed the
 // specular IBL evaluation (split-sum approximation) and the B
 // channel feeds the sheen lobe. Output is a 256x256 rgba16float
-// texture. Direct port of nightshade's brdf_lut.wgsl.
+// texture.
 
 const PI: f32 = 3.14159265358979323846;
 const NUM_SAMPLES: u32 = 1024u;

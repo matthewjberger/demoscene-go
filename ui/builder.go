@@ -11,8 +11,8 @@ import (
 // passing Entity values.
 //
 // Builder is intentionally plain Go: no codegen, no macros. The
-// shape mirrors nightshade's UiTreeBuilder but the entities it
-// produces are ordinary ECS rows that any system can query.
+// entities it produces are ordinary ECS rows that any system can
+// query.
 //
 // Usage:
 //

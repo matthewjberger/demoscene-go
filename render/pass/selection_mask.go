@@ -45,9 +45,8 @@ type selectionMaskPassState struct {
 // entities, and writes 1.0 to the selection_mask target where the
 // test passes.
 //
-// Mirrors nightshade's selection-mask shader. Reuses the entity_id
-// texture the mesh pass already writes for picking, so the only
-// per-frame upload is the small bitset.
+// Reuses the entity_id texture the mesh pass already writes for
+// picking, so the only per-frame upload is the small bitset.
 func NewSelectionMaskPass(device *wgpu.Device) (*render.Pass, error) {
 	state := &selectionMaskPassState{}
 

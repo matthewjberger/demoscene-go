@@ -6,7 +6,6 @@
 // reads light_indices[base + i] for each matched light, skipping
 // the all-lights loop.
 //
-// Direct port of nightshade's cluster_light_assign.wgsl.
 // Directional lights live at the front of the lights buffer and
 // the mesh shader iterates them unconditionally; only the local
 // lights past num_directional_lights go through this culler.

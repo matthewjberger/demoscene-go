@@ -9,10 +9,10 @@ import (
 // entity linked by an [EngineEntity] and marks it dirty so the
 // transform propagation system rebuilds the GlobalTransform.
 //
-// Ported from nightshade's `sync_engine_transform`. The point of the
-// named helper is convention: game-side systems should never reach
-// into engine [transform.LocalTransform] directly; they always go
-// through this API. The function is a no-op for stale links.
+// The point of the named helper is convention: game-side systems
+// should never reach into engine [transform.LocalTransform]
+// directly; they always go through this API. The function is a
+// no-op for stale links.
 func SyncEngineTransform(engine *ecs.World, link EngineEntity, local transform.LocalTransform) {
 	existing, ok := ecs.GetMut[transform.LocalTransform](engine, link.Entity)
 	if !ok {
@@ -46,7 +46,7 @@ func SyncEngineRotation(engine *ecs.World, link EngineEntity, rotation transform
 }
 
 // DespawnLinked despawns both the game entity and its linked engine
-// entity (if any). Mirrors nightshade's `despawn_linked`.
+// entity (if any).
 func DespawnLinked(engine, game *ecs.World, gameEntity ecs.Entity) {
 	if link, ok := ecs.Get[EngineEntity](game, gameEntity); ok {
 		engine.Despawn(link.Entity)

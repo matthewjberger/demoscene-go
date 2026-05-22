@@ -5,10 +5,9 @@ import (
 	"indigo/ui"
 )
 
-// GraphicsSettings is the engine's runtime toggle resource. Each pass
-// reads the relevant bool in Prepare/Execute and skips its work when
-// disabled. Ported from nightshade's `world.resources.graphics.*`
-// fields, scaled down to the toggles our current passes care about.
+// GraphicsSettings is the engine's runtime toggle resource. Each
+// pass reads the relevant bool in Prepare/Execute and skips its
+// work when disabled.
 type GraphicsSettings struct {
 	ShowSky     bool
 	ShowGrid    bool

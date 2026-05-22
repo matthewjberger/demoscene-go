@@ -12,7 +12,7 @@ import (
 var outlineShader string
 
 // OutlineColor is the default outline tint applied to selected
-// entities. Adapted from nightshade's editor outline color.
+// entities.
 var OutlineColor = [4]float32{1.0, 0.45, 0.0, 1.0}
 
 // OutlineWidth is the default outline thickness, measured in pixels
@@ -44,8 +44,6 @@ type outlinePassState struct {
 // Reads the selection_mask texture, performs an 8-neighbor max-pool
 // dilation, and writes pixels along the dilated boundary into the
 // scene_color attachment using alpha blending.
-//
-// Mirrors nightshade's editor outline shader.
 func NewOutlinePass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, viewportSize func() (uint32, uint32)) (*render.Pass, error) {
 	state := &outlinePassState{
 		color:    OutlineColor,

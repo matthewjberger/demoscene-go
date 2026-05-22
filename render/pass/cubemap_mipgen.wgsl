@@ -3,8 +3,6 @@
 // produces the standard 2x2 average; running this once per mip
 // level builds the full chain that the GGX prefilter pass needs
 // for higher-roughness samples.
-//
-// Direct port of nightshade's cubemap_mipgen.wgsl.
 
 @group(0) @binding(0)
 var src_texture: texture_2d_array<f32>;
@@ -25,7 +23,7 @@ struct MipParams {
 @group(0) @binding(3)
 var<uniform> params: MipParams;
 
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let coords = global_id.xy;
     let face = global_id.z;

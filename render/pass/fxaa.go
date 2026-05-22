@@ -34,10 +34,10 @@ type fxaaPassState struct {
 
 // NewFxaaPass builds the engine's FXAA antialiasing pass: sample
 // "input" with a fullscreen blit, run edge-detect + subpixel-blend,
-// write to "output". Mirrors nightshade's FxaaPass. The cached bind
-// group is rebuilt whenever the input texture view changes via the
-// render graph's [render.Pass.InvalidateBindGroups] hook, which fires on
-// resize and any other resource-version bump.
+// write to "output". The cached bind group is rebuilt whenever
+// the input texture view changes via the render graph's
+// [render.Pass.InvalidateBindGroups] hook, which fires on resize
+// and any other resource-version bump.
 func NewFxaaPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat) (*render.Pass, error) {
 	state := &fxaaPassState{}
 

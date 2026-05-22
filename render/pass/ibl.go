@@ -20,7 +20,7 @@ var cubemapMipgenShader string
 //go:embed filter_envmap.wgsl
 var filterEnvmapShader string
 
-// IBL grid sizes match nightshade's defaults.
+// IBL grid sizes.
 const (
 	BrdfLutSize           uint32 = 256
 	IrradianceSize        uint32 = 64
@@ -397,7 +397,7 @@ func captureProceduralCubemap(ibl *IBL, device *wgpu.Device, queue *wgpu.Queue) 
 	pass := encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
 	pass.SetPipeline(pipeline)
 	pass.SetBindGroup(0, bindGroup, nil)
-	pass.DispatchWorkgroups((ProceduralCubemapSize+7)/8, (ProceduralCubemapSize+7)/8, 6)
+	pass.DispatchWorkgroups((ProceduralCubemapSize+15)/16, (ProceduralCubemapSize+15)/16, 6)
 	pass.End()
 	pass.Release()
 
@@ -583,7 +583,7 @@ func generateCubemapMipmaps(cubemap *wgpu.Texture, device *wgpu.Device, queue *w
 		pass := encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
 		pass.SetPipeline(pipeline)
 		pass.SetBindGroup(0, bindGroup, nil)
-		groups := (dstSize + 7) / 8
+		groups := (dstSize + 15) / 16
 		if groups == 0 {
 			groups = 1
 		}
@@ -626,7 +626,34 @@ type filterParams struct {
 // the Lambertian distribution (writes irradiance mip 0) and once
 // per mip level with the GGX distribution at the roughness
 // matching that mip.
+//
+// Uses its own sampler — NOT the shared [IBL.Sampler] — because
+// the GGX importance-sampling math inside filter_envmap.wgsl
+// requests mip levels up to log2(SourceWidth) (typically 10 for
+// a 1024 cubemap) when roughness approaches 1.0. The shared
+// sampler clamps LOD at PrefilteredMipLevels (5) so the mesh
+// pass can't accidentally read past the prefiltered chain — that
+// clamp silently blocks the filter pass from sampling the high
+// mips of the SOURCE cubemap, collapsing the per-mip filter
+// quality and making rough surfaces look identical to shinier
+// ones.
 func filterEnvironmentMap(ibl *IBL, device *wgpu.Device, queue *wgpu.Queue) error {
+	filterSampler, err := device.CreateSampler(&wgpu.SamplerDescriptor{
+		Label:         "ibl filter pass sampler",
+		AddressModeU:  wgpu.AddressModeClampToEdge,
+		AddressModeV:  wgpu.AddressModeClampToEdge,
+		AddressModeW:  wgpu.AddressModeClampToEdge,
+		MagFilter:     wgpu.FilterModeLinear,
+		MinFilter:     wgpu.FilterModeLinear,
+		MipmapFilter:  wgpu.MipmapFilterModeLinear,
+		LodMinClamp:   0,
+		LodMaxClamp:   32,
+		MaxAnisotropy: 1,
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: filter sampler: %w", err)
+	}
+	defer filterSampler.Release()
 	irradiance, err := device.CreateTexture(&wgpu.TextureDescriptor{
 		Label: "ibl irradiance",
 		Size: wgpu.Extent3D{
@@ -778,7 +805,7 @@ func filterEnvironmentMap(ibl *IBL, device *wgpu.Device, queue *wgpu.Queue) erro
 			Layout: layout,
 			Entries: []wgpu.BindGroupEntry{
 				{Binding: 0, TextureView: ibl.CubemapView},
-				{Binding: 1, Sampler: ibl.Sampler},
+				{Binding: 1, Sampler: filterSampler},
 				{Binding: 2, TextureView: view},
 				{Binding: 3, Buffer: uniformBuf, Offset: 0, Size: uint64(unsafe.Sizeof(params))},
 			},
@@ -798,7 +825,7 @@ func filterEnvironmentMap(ibl *IBL, device *wgpu.Device, queue *wgpu.Queue) erro
 		pass := encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
 		pass.SetPipeline(pipeline)
 		pass.SetBindGroup(0, bindGroup, nil)
-		groups := (outputSize + 7) / 8
+		groups := (outputSize + 15) / 16
 		if groups == 0 {
 			groups = 1
 		}

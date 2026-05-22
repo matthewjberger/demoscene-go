@@ -248,8 +248,7 @@ func meshRelease(s any) {
 // every fragment regardless of position.
 //
 // Color is premultiplied by intensity so the shader doesn't have
-// to multiply at sample time (matches nightshade's projection.rs
-// packing).
+// to multiply at sample time.
 func extractLights(world *ecs.World, scratch []LightGPU) []LightGPU {
 	out := scratch
 	out = out[:0]
@@ -379,8 +378,8 @@ func framebufferSize(context *render.PassContext) (uint32, uint32) {
 // dispatches can't share an encoder pass with a render pass.
 //
 //  1. cluster_bounds: writes per-cluster view-space AABBs.
-//     Re-dispatched every frame for simplicity; nightshade gates
-//     this on a "camera changed" flag, but the cost of running
+//     Re-dispatched every frame for simplicity; could be gated
+//     on a "camera changed" flag later, but the cost of running
 //     8x8x24 = 1536 invocations is trivial.
 //  2. copy lightGridReset -> lightGrid (zeros every count).
 //  3. cluster_light_assign: per cluster, tests every local light

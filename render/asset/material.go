@@ -15,9 +15,9 @@ const (
 // mode codes). [NoTextureLayer] means "no texture in this slot —
 // the shader should use the factor only."
 //
-// Mirrors the runtime shape nightshade's Material keeps: texture
-// slots reference layers into shared sRGB / linear texture arrays,
-// per-material factors / scales / alpha flags ride alongside.
+// Texture slots reference layers into shared sRGB / linear
+// texture arrays; per-material factors / scales / alpha flags ride
+// alongside.
 type Material struct {
 	BaseColor              [4]float32
 	BaseColorLayer         uint32

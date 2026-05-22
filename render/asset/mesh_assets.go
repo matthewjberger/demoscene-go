@@ -73,11 +73,10 @@ type meshEntry struct {
 	CpuVertices []MeshVertex
 }
 
-// MeshAssets is the engine's per-renderer mesh registry. Stored on the
-// engine ECS world via [MeshAssetsResource] so passes that want to draw
-// a mesh can look up its GPU buffer by handle. Mirrors the role of
-// nightshade's mesh asset cache, scaled down to "list of vertex buffers
-// indexed by handle."
+// MeshAssets is the engine's per-renderer mesh registry. Stored on
+// the engine ECS world via [MeshAssetsResource] so passes that
+// want to draw a mesh can look up its GPU buffer by handle. The
+// registry is "list of vertex buffers indexed by handle."
 type MeshAssets struct {
 	entries []meshEntry
 }

@@ -62,9 +62,9 @@ type HudHandles struct {
 	ContextMenu   menuPopup
 	ContextTarget ecs.Entity
 
-	// Which top-bar menu (if any) is currently open. Matches
-	// nightshade's active_context_menu resource: only one popup at a
-	// time, flipping a new one closes the previous.
+	// Which top-bar menu (if any) is currently open. Only one
+	// popup is shown at a time; flipping a new one closes the
+	// previous.
 	OpenMenu int
 
 	LeftPanel ecs.Entity

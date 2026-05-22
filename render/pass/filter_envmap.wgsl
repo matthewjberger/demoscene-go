@@ -9,8 +9,6 @@
 //     mirror lobe. Produces the prefiltered specular cubemap the
 //     IBL specular term samples with the reflection vector at
 //     roughness * MAX_REFLECTION_LOD.
-//
-// Direct port of nightshade's filter_envmap.wgsl.
 
 const PI: f32 = 3.14159265358979323846;
 
@@ -191,7 +189,7 @@ fn prefilter_env_map(normal: vec3<f32>, roughness: f32, pixel_seed: u32) -> vec3
     return textureSampleLevel(source_cubemap, source_sampler, normal, 0.0).rgb;
 }
 
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let coords = global_id.xy;
     let face = global_id.z;

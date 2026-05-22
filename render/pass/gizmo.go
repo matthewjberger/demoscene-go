@@ -105,11 +105,10 @@ func GizmoScreenPositions(origin mgl32.Vec3, axes [3]mgl32.Vec3, viewProj mgl32.
 
 // AxisWorldLengthForScreen returns the world-space distance that
 // projects to screenLength pixels at the depth of origin under a
-// perspective projection with half-vertical-FOV tanHalfFovY.
-// Mirrors nightshade's world_length_for_screen_pixels: a 1-unit
-// world segment at view distance d covers viewport_height /
-// (2*d*tanHalfFovY) pixels, so the inverse scales screenLength by
-// 2*d*tanHalfFovY/viewport_height.
+// perspective projection with half-vertical-FOV tanHalfFovY. A
+// 1-unit world segment at view distance d covers
+// viewport_height / (2*d*tanHalfFovY) pixels, so the inverse
+// scales screenLength by 2*d*tanHalfFovY/viewport_height.
 func AxisWorldLengthForScreen(origin mgl32.Vec3, viewProj mgl32.Mat4, viewport [2]float32, tanHalfFovY, screenLength float32) float32 {
 	clip := viewProj.Mul4x1(mgl32.Vec4{origin.X(), origin.Y(), origin.Z(), 1})
 	w := clip.W()
@@ -140,8 +139,7 @@ func projectWorld(p mgl32.Vec3, viewProj mgl32.Mat4, viewport [2]float32) (mgl32
 
 // ParametricTOnSegment returns the signed parametric position of p
 // projected perpendicularly onto the infinite line through a..b
-// (NOT clamped to [0,1]). a corresponds to t=0, b to t=1. Mirrors
-// nightshade's parametric_t_on_segment.
+// (NOT clamped to [0,1]). a corresponds to t=0, b to t=1.
 func ParametricTOnSegment(p, a, b mgl32.Vec2) float32 {
 	ab := b.Sub(a)
 	lengthSq := ab.Dot(ab)
@@ -180,8 +178,8 @@ const RingSegmentCount = 64
 // RingBasis picks two world-space basis vectors that span the plane
 // perpendicular to axis. The first is "right-ish," the second is
 // "up-ish"; together with axis they form a right-handed frame.
-// Adapted directly from nightshade's ring_basis: when axis is near
-// world up, use world X as the seed instead.
+// When axis is near world up, world X is used as the seed instead
+// so the cross product stays non-degenerate.
 func RingBasis(axis mgl32.Vec3) (mgl32.Vec3, mgl32.Vec3) {
 	worldUp := mgl32.Vec3{0, 1, 0}
 	if math.Abs(float64(axis.Y())) > 0.9 {

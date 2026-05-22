@@ -22,11 +22,11 @@ type presentPassState struct {
 	bindGroup       *wgpu.BindGroup
 }
 
-// NewPresentPass builds the final pass of the default render graph: a
-// fullscreen blit that samples scene_color and writes to the swapchain.
-// Mirrors nightshade's BlitPass in shape; uses the resource-version hook
-// for bind-group invalidation so a swapchain or scene_color resize doesn't
-// leave a stale view bound.
+// NewPresentPass builds the final pass of the default render graph:
+// a fullscreen blit that samples scene_color and writes to the
+// swapchain. Uses the resource-version hook for bind-group
+// invalidation so a swapchain or scene_color resize doesn't leave
+// a stale view bound.
 func NewPresentPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat) (*render.Pass, error) {
 	state := &presentPassState{}
 

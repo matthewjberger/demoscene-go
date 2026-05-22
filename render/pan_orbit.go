@@ -21,9 +21,7 @@ import (
 // the controller is interpolating toward. The targets are what
 // input mutates; smoothing pulls the current toward them.
 //
-// Mirrors nightshade's PanOrbitCamera component, with the gamepad /
-// touch / modifier-key plumbing dropped: orbit on left drag, pan on
-// right drag, zoom on scroll.
+// Controls: orbit on left drag, pan on right drag, zoom on scroll.
 type PanOrbitController struct {
 	Focus  transform.Vec3
 	Radius float32
@@ -192,8 +190,7 @@ func writePanOrbitCamera(controller *PanOrbitController, camera *Camera) {
 }
 
 // computePanOrbitPose returns the camera position and orientation
-// quaternion for given orbit parameters. Mirrors nightshade's
-// compute_pan_orbit_transform.
+// quaternion for given orbit parameters.
 func computePanOrbitPose(focus transform.Vec3, yaw, pitch, radius float32) (transform.Vec3, transform.Quat) {
 	yawQuat := mgl32.QuatRotate(yaw, mgl32.Vec3{0, 1, 0})
 	pitchQuat := mgl32.QuatRotate(-pitch, mgl32.Vec3{1, 0, 0})

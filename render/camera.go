@@ -6,10 +6,9 @@ import "github.com/go-gl/mathgl/mgl32"
 // resource on the ECS world; the mesh pass looks it up in Prepare and
 // composes view × projection × global-transform per instance.
 //
-// Kept deliberately simple for the slice: a look-at view + a
-// perspective projection driven by aspect/fov/near/far. nightshade has
-// a richer ecs/camera module (multiple cameras, viewports, controllers);
-// we'll grow into that shape as needed.
+// Kept deliberately simple: a look-at view + a perspective
+// projection driven by aspect/fov/near/far. Multiple cameras,
+// viewports, and controller types can grow on top later.
 type Camera struct {
 	Eye    mgl32.Vec3
 	Target mgl32.Vec3

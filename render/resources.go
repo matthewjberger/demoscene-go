@@ -6,10 +6,9 @@ import "github.com/cogentcore/webgpu/wgpu"
 // Zero is a valid id; the ID is just an index into the descriptor slice.
 type ResourceID uint32
 
-// ResourceKind enumerates the kinds of GPU resources a render graph can own.
-// It mirrors the union of ResourceType in nightshade's rendergraph, pared to
-// the minimum needed for the engine today: color + depth, external (the
-// caller supplies a view each frame) or transient (the graph allocates).
+// ResourceKind enumerates the kinds of GPU resources a render
+// graph can own: color + depth, external (the caller supplies a
+// view each frame) or transient (the graph allocates).
 type ResourceKind uint8
 
 const (
@@ -60,13 +59,11 @@ type TextureHandle struct {
 // Resources owns the descriptors, runtime handles, and versions for every
 // graph resource.
 //
-// Versions are the dirty-detection mechanism. Each resource has a u64
-// stamp that increments every time the underlying handle changes
-// (external view replacement each frame, or transient reallocation on
-// resize). Passes record the version they cached a bind group against; if
-// the version moves they invalidate. This mirrors the
-// `versions: HashMap<ResourceId, u64>` table in nightshade's
-// rendergraph::resources.
+// Versions are the dirty-detection mechanism. Each resource has a
+// u64 stamp that increments every time the underlying handle
+// changes (external view replacement each frame, or transient
+// reallocation on resize). Passes record the version they cached
+// a bind group against; if the version moves they invalidate.
 type Resources struct {
 	Descriptors []ResourceDescriptor
 	Handles     []TextureHandle

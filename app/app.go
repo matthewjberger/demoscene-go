@@ -1,10 +1,9 @@
-// Package app is the data-oriented analogue of nightshade's State trait.
+// Package app is the data-oriented application lifecycle for an
+// indigo binary.
 //
-// Nightshade's State is an OO trait the application implements; methods
-// dispatch through a vtable. indigo keeps the same lifecycle hooks but
-// stores them as function-value fields on an [App] struct. Applications
-// construct an [App] and hand it to the main loop; no interfaces, no
-// vtables, no inheritance, just data.
+// Lifecycle hooks live as function-value fields on an [App] struct:
+// no interfaces, no vtables, no inheritance, just data. Applications
+// construct an [App] and hand it to the main loop.
 //
 // Conventions:
 //   - Initialize runs once after the renderer is built.
@@ -21,8 +20,8 @@ import (
 	"indigo/render"
 )
 
-// App is a bundle of lifecycle hooks. Mirrors the names from
-// nightshade's State trait.
+// App is a bundle of lifecycle hooks the main loop invokes at
+// fixed points each frame.
 type App struct {
 	Initialize           func(world *ecs.World)
 	ConfigureRenderGraph func(world *ecs.World, renderer *render.Renderer)

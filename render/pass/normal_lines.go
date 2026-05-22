@@ -15,11 +15,11 @@ import (
 // the vertex's world-space normal for
 // [render.GraphicsSettings.NormalLineLength] units.
 //
-// Mirrors nightshade's sync_normal_data: the world normal uses the
-// upper-3x3 of the model matrix as the normal matrix. That's
-// accurate for uniform scale; non-uniform scale would need a true
-// transpose-inverse normal matrix, but indigo's transform.Mat4
-// only carries TRS so the approximation is fine for the scene.
+// The world normal uses the upper-3x3 of the model matrix as the
+// normal matrix. That's accurate for uniform scale; non-uniform
+// scale would need a true transpose-inverse normal matrix, but
+// transform.Mat4 only carries TRS so the approximation is fine
+// for the editor scene.
 //
 // Push runs every frame so the lines pass picks the data up next
 // draw. Frame-by-frame regeneration is fine for an interactive

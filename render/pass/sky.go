@@ -9,6 +9,7 @@ import (
 
 	"indigo/ecs"
 	"indigo/render"
+	"indigo/window"
 )
 
 //go:embed sky.wgsl
@@ -39,10 +40,9 @@ type skyPassState struct {
 
 // NewSkyPass builds the engine's procedural sky pass. Draws a
 // fullscreen triangle that fills scene_color with a sky+ground
-// gradient plus a small sun disk, reconstructing per-pixel world
-// directions from the camera's inverse projection. Ported from
-// nightshade's SkyPass + sky.wgsl, scaled down to the single procedural
-// atmosphere mode (no HDR / nebula / day-night).
+// gradient plus a small sun disk and drifting clouds, reconstructing
+// per-pixel world directions from the camera's inverse projection.
+// Single procedural atmosphere mode (no HDR / nebula / day-night).
 //
 // The pass writes only "color" (no depth), so it should appear FIRST
 // in the graph: as the first writer of scene_color it gets the
@@ -156,12 +156,13 @@ func skyPrepare(s any, context *render.PassContext) error {
 	view := render.CameraView(camera)
 	projInv := proj.Inv()
 
+	uptime := ecs.MustResource[window.Window](context.World).Timing.UptimeSeconds
 	uniform := skyUniform{
 		Proj:    proj,
 		ProjInv: projInv,
 		View:    view,
 		CamPos:  [4]float32{camera.Eye[0], camera.Eye[1], camera.Eye[2], 1.0},
-		Time:    0.0,
+		Time:    uptime,
 	}
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.uniformBuffer, 0, bytesOf(&uniform))
 	return nil

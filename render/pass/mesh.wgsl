@@ -3,10 +3,7 @@
 // storage buffer and every fragment iterates them; local lights
 // (point + spot) are pre-bucketed per cluster by the
 // cluster_light_assign compute pass, and each fragment only
-// iterates the lights its cluster overlaps. Ports nightshade's
-// mesh.wgsl PBR + clustered loop, trimmed to the feature set
-// indigo currently supports (no IBL, shadows, skinning, morph
-// targets, or material extensions).
+// iterates the lights its cluster overlaps.
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -121,16 +118,17 @@ fn safe_normalize(v: vec3<f32>) -> vec3<f32> {
 
 // get_normal builds the perturbed surface normal from the
 // interpolated geometric normal + tangent and a sampled normal
-// map. Direct port of nightshade's get_normal: re-orthogonalizes
-// T against N to undo the post-rasterization interpolation drift,
-// then assembles the TBN basis. The world_tangent's .w component
-// is the glTF handedness sign for the bitangent (+1 or -1).
+// map. Re-orthogonalizes T against N to undo the post-
+// rasterization interpolation drift, then assembles the TBN
+// basis. The world_tangent's .w component is the glTF handedness
+// sign for the bitangent (+1 or -1).
 //
 // flags is the per-material normal_map_flags bitfield: bit 0 =
 // FLIP_Y (negate the green channel — common for tools that
 // export -Y), bit 1 = TWO_COMPONENT (only XY stored, reconstruct
-// Z = sqrt(1 - x^2 - y^2)). Indigo currently passes 0 for both;
-// the helper takes the arg so the API matches nightshade.
+// Z = sqrt(1 - x^2 - y^2)). Both bits are passed in as 0 today;
+// the helper takes the arg so the flag plumbing is in place for
+// when materials surface them.
 fn get_normal(
     world_normal: vec3<f32>,
     world_tangent: vec4<f32>,
@@ -239,6 +237,19 @@ fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
 fn fresnel_schlick_roughness(cos_theta: f32, f0: vec3<f32>, roughness: f32) -> vec3<f32> {
     let invR = vec3<f32>(1.0 - roughness);
     return f0 + (max(invR, f0) - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+// tonemap_aces is the Krzysztof Narkowicz ACES filmic
+// approximation. Maps linear HDR (0..inf) into perceptually-
+// encoded LDR (0..1) so the IBL specular term doesn't clip to
+// white the moment a metallic surface points at the sky.
+fn tonemap_aces(color: vec3<f32>) -> vec3<f32> {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return clamp((color * (a * color + b)) / (color * (c * color + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
 fn range_attenuation(range: f32, distance: f32) -> f32 {
@@ -388,11 +399,11 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     roughness = clamp(roughness, 0.04, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
-    // Raw occlusion sample. Strength is applied later via the
+    // Raw occlusion sample. Strength is applied later via
     // mix(ambient, ambient*occlusion, strength) so the term only
-    // attenuates the ambient IBL contribution, matching
-    // nightshade. Applying strength here too double-counts it and
-    // crushes ambient on any material with strength != 1.
+    // attenuates the ambient IBL contribution. Applying strength
+    // here too would double-count it and crush ambient on any
+    // material with strength != 1.
     var occlusion = 1.0;
     if (mat.occlusion_layer != NO_LAYER) {
         occlusion = sample_linear_layer(mat.occlusion_layer, in.uv, uv_ddx, uv_ddy).r;
@@ -410,9 +421,9 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
         return out_unlit;
     }
 
-    // Reuse the view_dir computed above for V (post back-face
-    // flip, the geom_normal points toward view_dir so V matches
-    // nightshade's `V = normalize(camera_position - world_pos)`).
+    // Reuse the view_dir computed above for V — after the back-
+    // face flip, geom_normal points toward view_dir, so V is
+    // exactly normalize(camera_position - world_pos).
     let v = view_dir;
     let n = normal;
     let f0 = mix(vec3<f32>(0.04), albedo, metallic);
@@ -466,8 +477,13 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     ambient = mix(ambient, ambient * occlusion, mat.occlusion_strength);
     let color = ambient + lo + emissive;
 
+    // Tonemap inline because scene_color is the LDR surface
+    // format. Without it, HDR specular IBL values >1 silently
+    // clip on attachment write. When scene_color moves to
+    // Rgba16Float and a dedicated postprocess pass owns
+    // exposure + tonemap, this call goes away.
     var output: FragmentOutput;
-    output.color = vec4<f32>(color, base_color.a);
+    output.color = vec4<f32>(tonemap_aces(color), base_color.a);
     output.entity_id = in.entity_id;
     return output;
 }

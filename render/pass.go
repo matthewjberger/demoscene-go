@@ -8,11 +8,9 @@ import (
 	"indigo/ecs"
 )
 
-// PassContext is what a pass's Prepare and Execute functions receive each
-// frame. It mirrors nightshade's PassExecutionContext, including the
-// typed handle to the ECS world (`configs: &C` in the Rust). Every
-// pointer is borrowed for the duration of the call and must not be
-// retained.
+// PassContext is what a pass's Prepare and Execute functions
+// receive each frame. Every pointer is borrowed for the duration
+// of the call and must not be retained.
 //
 // The slot lookup uses the pass-local name (e.g. "color"), not the graph-
 // global resource name. The graph wires those at compile time.
@@ -23,8 +21,7 @@ type PassContext struct {
 
 	// World is the engine's ECS world. Passes extract per-frame data
 	// (camera, lights, input) from it inside Prepare and upload as
-	// uniforms. Matches the role of `configs: &World` in nightshade's
-	// PassExecutionContext.
+	// uniforms.
 	World *ecs.World
 
 	Resources *Resources
@@ -140,10 +137,10 @@ func (c *PassContext) DepthAttachment(slot string) (wgpu.RenderPassDepthStencilA
 	}, nil
 }
 
-// Pass is the data-oriented analogue of nightshade's PassNode trait.
-// Instead of a trait with virtual dispatch, a pass is a struct of fields
-// the graph reads. State lives in [State] (any-typed so the graph stays
-// generic); per-pass logic is function values the graph calls.
+// Pass is a data-oriented render-graph node. A pass is a struct of
+// fields the graph reads. State lives in [State] (any-typed so the
+// graph stays generic); per-pass logic is function values the graph
+// calls — no interfaces, no virtual dispatch.
 //
 // Reads and Writes declare slot names that must be wired to resources
 // before the graph compiles.
@@ -163,11 +160,11 @@ type Pass struct {
 	// Execute records GPU commands for the frame. nil means "no-op".
 	Execute func(state any, context *PassContext) error
 
-	// InvalidateBindGroups is called by the graph before Prepare when any
-	// resource bound to one of the pass's slots has changed version since
-	// the previous frame (its handle was replaced; either external view
-	// refresh or transient reallocation). Mirrors nightshade's
-	// `PassNode::invalidate_bind_groups`. nil means "no caching to drop".
+	// InvalidateBindGroups is called by the graph before Prepare when
+	// any resource bound to one of the pass's slots has changed
+	// version since the previous frame (its handle was replaced;
+	// either external view refresh or transient reallocation).
+	// nil means "no caching to drop".
 	InvalidateBindGroups func(state any)
 
 	// Release frees GPU objects held in State. nil means "nothing to release".
