@@ -1,0 +1,10 @@
+[book]
+authors = ["Matthew J. Berger"]
+language = "en"
+src = "src"
+title = "indigo"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "ayu"
+mathjax-support = false

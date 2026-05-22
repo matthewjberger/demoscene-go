@@ -78,6 +78,22 @@ doc:
     go doc -all ./render
     go doc -all ./app
 
+# Builds the mdbook
+book-build:
+    just -d docs/book --justfile docs/book/justfile build
+
+# Serves the mdbook locally and opens the browser
+book-serve:
+    just -d docs/book --justfile docs/book/justfile serve
+
+# Watches the mdbook sources and rebuilds on change
+book-watch:
+    just -d docs/book --justfile docs/book/justfile watch
+
+# Cleans the mdbook build output
+book-clean:
+    just -d docs/book --justfile docs/book/justfile clean
+
 # Removes any built binaries (Windows)
 [windows]
 clean:
