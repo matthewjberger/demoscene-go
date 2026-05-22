@@ -78,14 +78,16 @@ func paintHover(world *ecs.World, entity ecs.Entity, idle, hover [4]float32) {
 }
 
 func setMenuVisible(world *ecs.World, menu menuPopup, visible bool) {
-	var panelAlpha float32
 	var textAlpha float32
 	if visible {
-		panelAlpha = 1
 		textAlpha = 1
 	}
+	// Panel background stays fully transparent in both states. The
+	// items below carry their own opaque backgrounds, so the popup
+	// reads as a column of buttons and the hierarchy panel sitting
+	// behind the popup stays visible between item rows.
 	if color, ok := ecs.GetMut[ui.Color](world, menu.Panel); ok {
-		color.RGBA = [4]float32{0.10, 0.11, 0.14, panelAlpha}
+		color.RGBA = [4]float32{0, 0, 0, 0}
 	}
 	for i := 0; i < menu.Count; i++ {
 		if color, ok := ecs.GetMut[ui.Color](world, menu.Items[i]); ok {
