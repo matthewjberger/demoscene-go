@@ -38,15 +38,15 @@ func initializeWorldEntities(worlds app.Worlds, meshes []asset.MeshHandle, meshN
 		ecs.MustMaskOf[render.Light](worlds.Engine) |
 		ecs.MustMaskOf[app.Name](worlds.Engine)
 
-	// Default sun: noon position. The light shines along
-	// normalize(0, -1, -0.3), so the sun sits up + slightly back.
-	// Pitch around X is atan2(0.3, 1) past straight-down, giving
-	// the same direction the reference editor uses at hour=12.
+	// Default sun: positioned up and back, aimed so the light's
+	// -Z forward direction lands on the origin. Gives the scene a
+	// classic upper-right key-light cast.
 	sun := worlds.Engine.Spawn(lightMask)
-	const sunPitch = -float32(math.Pi)/2.0 + 0.2914568 // atan2(0.3, 1)
+	sunYaw := transform.QuatFromAxisAngle(1.821, transform.Vec3{0, 1, 0})
+	sunPitch := transform.QuatFromAxisAngle(-0.969, transform.Vec3{1, 0, 0})
 	sunTransform := transform.LocalTransform{
-		Translation: transform.Vec3{0, 100, -30},
-		Rotation:    transform.QuatFromAxisAngle(sunPitch, transform.Vec3{1, 0, 0}),
+		Translation: transform.Vec3{4, 6, -1},
+		Rotation:    sunYaw.Mul(sunPitch),
 		Scale:       transform.Vec3{1, 1, 1},
 	}
 	ecs.Set(worlds.Engine, sun, sunTransform)
