@@ -128,7 +128,8 @@ func breakoutApp() *app.App {
 	return &app.App{
 		ConfigureRenderGraph: func(world *ecs.World, renderer *render.Renderer) {
 			arrays := ecs.MustResource[asset.MaterialTextureArraysResource](world).Arrays
-			if _, err := pass.AddMeshPass(renderer, arrays); err != nil {
+			ibl := ecs.MustResource[pass.IBLResource](world).IBL
+			if _, err := pass.AddMeshPass(renderer, arrays, ibl); err != nil {
 				log.Fatal(err)
 			}
 			_, fxaaOutputID, err := pass.AddFxaaPass(renderer)

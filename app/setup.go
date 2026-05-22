@@ -57,6 +57,11 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 		return nil, fmt.Errorf("app: material texture arrays: %w", err)
 	}
 
+	ibl, err := pass.NewIBL(renderer.Device, renderer.Queue)
+	if err != nil {
+		return nil, fmt.Errorf("app: ibl: %w", err)
+	}
+
 	lines := &pass.Lines{}
 
 	ecs.SetResource(engine, window.Window{
@@ -69,6 +74,7 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	ecs.SetResource(engine, asset.MeshAssetsResource{Assets: meshAssets})
 	ecs.SetResource(engine, asset.TextureCacheResource{Cache: textureCache})
 	ecs.SetResource(engine, asset.MaterialTextureArraysResource{Arrays: materialArrays})
+	ecs.SetResource(engine, pass.IBLResource{IBL: ibl})
 	ecs.SetResource(engine, pass.LinesResource{Lines: lines})
 	ecs.SetResource(engine, primitives)
 	ecs.SetResource(engine, render.NewInput())

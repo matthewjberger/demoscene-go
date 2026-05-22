@@ -25,10 +25,11 @@ func AddSkyPass(renderer *render.Renderer) (*render.Pass, error) {
 
 // AddMeshPass builds the standard mesh pass and registers it as a
 // writer of scene_color, depth, and the entity_id pick target.
-// arrays is the engine-world's [asset.MaterialTextureArrays],
-// bound by the pass as the global PBR texture source.
-func AddMeshPass(renderer *render.Renderer, arrays *asset.MaterialTextureArrays) (*render.Pass, error) {
-	pass, err := NewMeshPass(renderer.Device, renderer.SurfaceFormat, renderer.AspectRatio, arrays)
+// arrays is the engine-world's [asset.MaterialTextureArrays] (PBR
+// texture source); ibl is the [IBL] bundle the fragment shader
+// samples for ambient diffuse + specular.
+func AddMeshPass(renderer *render.Renderer, arrays *asset.MaterialTextureArrays, ibl *IBL) (*render.Pass, error) {
+	pass, err := NewMeshPass(renderer.Device, renderer.SurfaceFormat, renderer.AspectRatio, arrays, ibl)
 	if err != nil {
 		return nil, err
 	}

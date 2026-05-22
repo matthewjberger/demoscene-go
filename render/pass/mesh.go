@@ -72,11 +72,13 @@ type meshPassState struct {
 	viewProjLayout *wgpu.BindGroupLayout
 	globalBgLayout *wgpu.BindGroupLayout
 	handleBgLayout *wgpu.BindGroupLayout
+	iblBgLayout    *wgpu.BindGroupLayout
 
 	viewProjBuffer    *wgpu.Buffer
 	viewProjBindGroup *wgpu.BindGroup
 
 	globalBindGroup *wgpu.BindGroup
+	iblBindGroup    *wgpu.BindGroup
 
 	clusters *clusterResources
 
@@ -103,7 +105,7 @@ type meshPassState struct {
 // its handle's buffers so the GPU side only writes the entries
 // that changed this frame. Materials are sampled from the global
 // [asset.MaterialTextureArrays] resource, bound once at pass setup.
-func NewMeshPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect func() float32, arrays *asset.MaterialTextureArrays) (*render.Pass, error) {
+func NewMeshPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect func() float32, arrays *asset.MaterialTextureArrays, ibl *IBL) (*render.Pass, error) {
 	state := &meshPassState{
 		perHandle:    make(map[asset.MeshHandle]*handleInstances, 4),
 		entityHandle: make(map[ecs.Entity]asset.MeshHandle, 64),
@@ -204,6 +206,60 @@ func NewMeshPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect f
 	}
 	state.handleBgLayout = handleBgLayout
 
+	iblBgLayout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
+		Label: "mesh ibl bind group layout",
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{
+				Binding:    0,
+				Visibility: wgpu.ShaderStageFragment,
+				Texture: wgpu.TextureBindingLayout{
+					SampleType:    wgpu.TextureSampleTypeFloat,
+					ViewDimension: wgpu.TextureViewDimensionCube,
+				},
+			},
+			{
+				Binding:    1,
+				Visibility: wgpu.ShaderStageFragment,
+				Texture: wgpu.TextureBindingLayout{
+					SampleType:    wgpu.TextureSampleTypeFloat,
+					ViewDimension: wgpu.TextureViewDimensionCube,
+				},
+			},
+			{
+				Binding:    2,
+				Visibility: wgpu.ShaderStageFragment,
+				Texture: wgpu.TextureBindingLayout{
+					SampleType:    wgpu.TextureSampleTypeFloat,
+					ViewDimension: wgpu.TextureViewDimension2D,
+				},
+			},
+			{
+				Binding:    3,
+				Visibility: wgpu.ShaderStageFragment,
+				Sampler:    wgpu.SamplerBindingLayout{Type: wgpu.SamplerBindingTypeFiltering},
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("mesh pass: ibl bind group layout: %w", err)
+	}
+	state.iblBgLayout = iblBgLayout
+
+	iblBindGroup, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
+		Label:  "mesh ibl bind group",
+		Layout: iblBgLayout,
+		Entries: []wgpu.BindGroupEntry{
+			{Binding: 0, TextureView: ibl.IrradianceView},
+			{Binding: 1, TextureView: ibl.PrefilteredView},
+			{Binding: 2, TextureView: ibl.BrdfLutView},
+			{Binding: 3, Sampler: ibl.Sampler},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("mesh pass: ibl bind group: %w", err)
+	}
+	state.iblBindGroup = iblBindGroup
+
 	viewProjBuffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "mesh view_proj buffer",
 		Size:  uint64(unsafe.Sizeof(mgl32.Mat4{})),
@@ -265,7 +321,7 @@ func NewMeshPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect f
 
 	pipelineLayout, err := device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
 		Label:            "mesh pipeline layout",
-		BindGroupLayouts: []*wgpu.BindGroupLayout{viewProjLayout, globalBgLayout, handleBgLayout},
+		BindGroupLayouts: []*wgpu.BindGroupLayout{viewProjLayout, globalBgLayout, handleBgLayout, iblBgLayout},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("mesh pass: pipeline layout: %w", err)
@@ -516,6 +572,7 @@ func meshExecute(s any, context *render.PassContext) error {
 	pass.SetPipeline(state.pipeline)
 	pass.SetBindGroup(0, state.viewProjBindGroup, nil)
 	pass.SetBindGroup(1, state.globalBindGroup, nil)
+	pass.SetBindGroup(3, state.iblBindGroup, nil)
 
 	for _, handle := range state.sortedHandles {
 		bucket := state.perHandle[handle]
@@ -537,6 +594,12 @@ func meshRelease(s any) {
 	state := s.(*meshPassState)
 	for _, h := range state.perHandle {
 		releaseHandleInstances(h)
+	}
+	if state.iblBindGroup != nil {
+		state.iblBindGroup.Release()
+	}
+	if state.iblBgLayout != nil {
+		state.iblBgLayout.Release()
 	}
 	if state.globalBindGroup != nil {
 		state.globalBindGroup.Release()
@@ -687,6 +750,7 @@ func buildClusterUniforms(camera *render.Camera, aspect float32, context *render
 	u.TileSize = [2]float32{tileX, tileY}
 	u.NumLights = numDirectional + numLocal
 	u.NumDirectionalLights = numDirectional
+	u.CameraPosition = [4]float32{camera.Eye[0], camera.Eye[1], camera.Eye[2], 1}
 	return u
 }
 
@@ -715,9 +779,7 @@ func dispatchClusterPasses(state *meshPassState, context *render.PassContext) {
 	dispatchY := (ClusterGridY + 7) / 8
 	dispatchZ := ClusterGridZ
 
-	boundsPass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{
-		Label: "cluster bounds",
-	})
+	boundsPass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
 	boundsPass.SetPipeline(state.clusters.boundsPipeline)
 	boundsPass.SetBindGroup(0, state.clusters.boundsBindGroup, nil)
 	boundsPass.DispatchWorkgroups(dispatchX, dispatchY, dispatchZ)
@@ -727,9 +789,7 @@ func dispatchClusterPasses(state *meshPassState, context *render.PassContext) {
 	lightGridBytes := LightGridSize * uint64(TotalClusters)
 	context.Encoder.CopyBufferToBuffer(state.clusters.lightGridReset, 0, state.clusters.lightGrid, 0, lightGridBytes)
 
-	assignPass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{
-		Label: "cluster light assign",
-	})
+	assignPass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
 	assignPass.SetPipeline(state.clusters.assignPipeline)
 	assignPass.SetBindGroup(0, state.clusters.assignBindGroup, nil)
 	assignPass.DispatchWorkgroups(dispatchX, dispatchY, dispatchZ)

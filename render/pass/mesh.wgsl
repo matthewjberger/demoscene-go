@@ -55,6 +55,7 @@ struct ClusterUniforms {
     tile_size: vec2<f32>,
     num_lights: u32,
     num_directional_lights: u32,
+    camera_position: vec4<f32>,
 };
 
 struct Material {
@@ -95,12 +96,72 @@ struct Material {
 @group(2) @binding(1) var<storage, read> materials:  array<Material>;
 @group(2) @binding(2) var<storage, read> entity_ids: array<u32>;
 
+@group(3) @binding(0) var irradiance_map:  texture_cube<f32>;
+@group(3) @binding(1) var prefiltered_env: texture_cube<f32>;
+@group(3) @binding(2) var brdf_lut:        texture_2d<f32>;
+@group(3) @binding(3) var ibl_sampler:     sampler;
+
 const NO_LAYER: u32 = 0xFFFFFFFFu;
 const PI: f32 = 3.14159265359;
 const MAX_LIGHTS_PER_CLUSTER: u32 = 256u;
 const LIGHT_TYPE_DIRECTIONAL: u32 = 0u;
 const LIGHT_TYPE_POINT: u32 = 1u;
 const LIGHT_TYPE_SPOT: u32 = 2u;
+const MAX_REFLECTION_LOD: f32 = 4.0;
+const NORMAL_MAP_FLIP_Y: u32 = 1u;
+const NORMAL_MAP_TWO_COMPONENT: u32 = 2u;
+
+fn safe_normalize(v: vec3<f32>) -> vec3<f32> {
+    let len_sq = dot(v, v);
+    if (len_sq < 0.0001) {
+        return vec3<f32>(0.0, 1.0, 0.0);
+    }
+    return v / sqrt(len_sq);
+}
+
+// get_normal builds the perturbed surface normal from the
+// interpolated geometric normal + tangent and a sampled normal
+// map. Direct port of nightshade's get_normal: re-orthogonalizes
+// T against N to undo the post-rasterization interpolation drift,
+// then assembles the TBN basis. The world_tangent's .w component
+// is the glTF handedness sign for the bitangent (+1 or -1).
+//
+// flags is the per-material normal_map_flags bitfield: bit 0 =
+// FLIP_Y (negate the green channel — common for tools that
+// export -Y), bit 1 = TWO_COMPONENT (only XY stored, reconstruct
+// Z = sqrt(1 - x^2 - y^2)). Indigo currently passes 0 for both;
+// the helper takes the arg so the API matches nightshade.
+fn get_normal(
+    world_normal: vec3<f32>,
+    world_tangent: vec4<f32>,
+    normal_sample: vec3<f32>,
+    has_normal_texture: bool,
+    normal_scale: f32,
+    flags: u32,
+) -> vec3<f32> {
+    let n = safe_normalize(world_normal);
+    if (!has_normal_texture) {
+        return n;
+    }
+
+    var sample_xy = normal_sample.xy * 2.0 - 1.0;
+    if ((flags & NORMAL_MAP_FLIP_Y) != 0u) {
+        sample_xy.y = -sample_xy.y;
+    }
+    var sample_z: f32;
+    if ((flags & NORMAL_MAP_TWO_COMPONENT) != 0u) {
+        sample_z = sqrt(max(1.0 - dot(sample_xy, sample_xy), 0.0));
+    } else {
+        sample_z = normal_sample.z * 2.0 - 1.0;
+    }
+
+    let tangent_normal = vec3<f32>(sample_xy * normal_scale, sample_z);
+    var t = safe_normalize(world_tangent.xyz);
+    t = safe_normalize(t - n * dot(n, t));
+    let b = cross(n, t) * world_tangent.w;
+    let tbn = mat3x3<f32>(t, b, n);
+    return safe_normalize(tbn * tangent_normal);
+}
 
 struct FragmentOutput {
     @location(0) color:     vec4<f32>,
@@ -161,6 +222,15 @@ fn geometry_smith(n: vec3<f32>, v: vec3<f32>, l: vec3<f32>, roughness: f32) -> f
 
 fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
     return f0 + (vec3<f32>(1.0) - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+// fresnel_schlick_roughness is the roughness-aware variant used
+// for IBL specular: pulls f0 up toward (1 - roughness) so rough
+// surfaces don't artificially darken at grazing angles. Standard
+// trick from Real Shading in Unreal Engine 4 / Karis 2013.
+fn fresnel_schlick_roughness(cos_theta: f32, f0: vec3<f32>, roughness: f32) -> vec3<f32> {
+    let invR = vec3<f32>(1.0 - roughness);
+    return f0 + (max(invR, f0) - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
 fn range_attenuation(range: f32, distance: f32) -> f32 {
@@ -258,17 +328,12 @@ fn fragment_main(in: VertexOutput, @builtin(front_facing) front_facing: bool) ->
         geom_normal = -geom_normal;
     }
 
-    var normal = geom_normal;
-    if (mat.normal_layer != NO_LAYER) {
-        let n_sample = sample_linear_layer(mat.normal_layer, in.uv).xyz * 2.0 - vec3<f32>(1.0);
-        let scaled = vec3<f32>(n_sample.xy * mat.normal_scale, n_sample.z);
-        let t_len = length(in.world_tangent.xyz);
-        if (t_len > 0.001) {
-            let t = in.world_tangent.xyz / t_len;
-            let b = normalize(cross(geom_normal, t) * in.world_tangent.w);
-            normal = normalize(t * scaled.x + b * scaled.y + geom_normal * scaled.z);
-        }
+    var normal_sample = vec3<f32>(0.5, 0.5, 1.0);
+    let has_normal_texture = mat.normal_layer != NO_LAYER;
+    if (has_normal_texture) {
+        normal_sample = sample_linear_layer(mat.normal_layer, in.uv).xyz;
     }
+    let normal = get_normal(geom_normal, in.world_tangent, normal_sample, has_normal_texture, mat.normal_scale, 0u);
 
     var albedo_sample = vec4<f32>(1.0, 1.0, 1.0, 1.0);
     if (mat.base_layer != NO_LAYER) {
@@ -309,7 +374,7 @@ fn fragment_main(in: VertexOutput, @builtin(front_facing) front_facing: bool) ->
         return out_unlit;
     }
 
-    let v = normalize(-in.world_pos);
+    let v = normalize(cluster_uniforms.camera_position.xyz - in.world_pos);
     let n = normal;
     let f0 = mix(vec3<f32>(0.04), albedo, metallic);
 
@@ -338,8 +403,29 @@ fn fragment_main(in: VertexOutput, @builtin(front_facing) front_facing: bool) ->
         lo = lo + shade_one_light(light, point_to_light, v, n, albedo, f0, metallic, roughness);
     }
 
-    let ambient = albedo * 0.05 * occlusion;
-    let color = (ambient + lo) * occlusion + emissive;
+    // Image-based ambient (split-sum approximation + multi-scatter
+    // Fdez-Aguera 2019). Diffuse term samples the Lambertian-filtered
+    // irradiance cubemap with N; specular term samples the
+    // GGX-prefiltered cubemap with R at LOD = roughness *
+    // MAX_REFLECTION_LOD and pairs it with the pre-integrated BRDF
+    // LUT sampled at (NdotV, roughness).
+    let n_dot_v = max(dot(n, v), 0.0);
+    let r = reflect(-v, n);
+    let f_ibl = fresnel_schlick_roughness(n_dot_v, f0, roughness);
+    let irradiance = textureSampleLevel(irradiance_map, ibl_sampler, n, 0.0).rgb;
+    let prefiltered = textureSampleLevel(prefiltered_env, ibl_sampler, r, roughness * MAX_REFLECTION_LOD).rgb;
+    let brdf = textureSampleLevel(brdf_lut, ibl_sampler, vec2<f32>(n_dot_v, roughness), 0.0).rg;
+    let fss_ess = f_ibl * brdf.x + brdf.y;
+    let ems = 1.0 - (brdf.x + brdf.y);
+    let f_avg = f0 + (vec3<f32>(1.0) - f0) / 21.0;
+    let fms_ems = ems * fss_ess * f_avg / (vec3<f32>(1.0) - f_avg * ems);
+    let c_diff = albedo * (1.0 - metallic);
+    let kd_ibl = c_diff * (vec3<f32>(1.0) - fss_ess - fms_ems);
+    let diffuse_ibl = (fms_ems + kd_ibl) * irradiance;
+    let specular_ibl = prefiltered * fss_ess;
+    var ambient = diffuse_ibl + specular_ibl;
+    ambient = mix(ambient, ambient * occlusion, mat.occlusion_strength);
+    let color = ambient + lo + emissive;
 
     var output: FragmentOutput;
     output.color = vec4<f32>(color, base_color.a);

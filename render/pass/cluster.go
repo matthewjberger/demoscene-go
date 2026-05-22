@@ -45,6 +45,7 @@ type ClusterUniforms struct {
 	TileSize             [2]float32  // 8
 	NumLights            uint32      // 4
 	NumDirectionalLights uint32      // 4
+	CameraPosition       [4]float32  // 16 (xyz + 1.0 pad)
 }
 
 // ClusterBounds is the per-cluster view-space AABB the cluster
@@ -292,7 +293,6 @@ func newClusterResources(device *wgpu.Device) (*clusterResources, error) {
 	defer boundsPipelineLayout.Release()
 
 	boundsPipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
-		Label:  "cluster bounds pipeline",
 		Layout: boundsPipelineLayout,
 		Compute: wgpu.ProgrammableStageDescriptor{
 			Module:     boundsShader,
@@ -323,7 +323,6 @@ func newClusterResources(device *wgpu.Device) (*clusterResources, error) {
 	defer assignPipelineLayout.Release()
 
 	assignPipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
-		Label:  "cluster light assign pipeline",
 		Layout: assignPipelineLayout,
 		Compute: wgpu.ProgrammableStageDescriptor{
 			Module:     assignShader,
