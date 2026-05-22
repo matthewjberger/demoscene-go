@@ -8,6 +8,7 @@ import (
 
 	"indigo/ecs"
 	"indigo/render"
+	"indigo/transform"
 )
 
 //go:embed selection_mask.wgsl
@@ -159,6 +160,40 @@ func NewSelectionMaskPass(device *wgpu.Device) (*render.Pass, error) {
 	}, nil
 }
 
+// setSelectionBit marks the entity ID's slot in the bitset. Out-of-
+// range IDs are dropped silently — the bitset capacity is a render
+// constant, and a stray oversized ID just means that entity won't
+// be considered selected this frame.
+func setSelectionBit(bits []uint32, id uint32) {
+	word := id / 32
+	bit := id & 31
+	if int(word) >= len(bits) {
+		return
+	}
+	bits[word] |= 1 << bit
+}
+
+// collectDescendants walks every descendant of root through the
+// transform parent/children cache. Used by the selection-mask pass
+// so selecting a group root highlights the full cluster as a unit:
+// the bitset gains an entry per descendant, internal sub-mesh
+// boundaries end up mask-to-mask (no outline edge), and the
+// dilation produces a single silhouette outline instead of one
+// outline per mesh.
+func collectDescendants(world *ecs.World, root ecs.Entity) []ecs.Entity {
+	stack := []ecs.Entity{root}
+	var out []ecs.Entity
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for _, child := range transform.QueryChildren(world, current) {
+			out = append(out, child)
+			stack = append(stack, child)
+		}
+	}
+	return out
+}
+
 func selectionMaskPrepare(s any, context *render.PassContext) error {
 	state := s.(*selectionMaskPassState)
 
@@ -168,13 +203,10 @@ func selectionMaskPrepare(s any, context *render.PassContext) error {
 
 	selectedMask := ecs.MustMaskOf[render.Selected](context.World)
 	context.World.ForEach(selectedMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
-		id := entity.ID
-		word := id / 32
-		bit := id & 31
-		if int(word) >= len(state.bitsetScratch) {
-			return
+		setSelectionBit(state.bitsetScratch[:], entity.ID)
+		for _, descendant := range collectDescendants(context.World, entity) {
+			setSelectionBit(state.bitsetScratch[:], descendant.ID)
 		}
-		state.bitsetScratch[word] |= 1 << bit
 	})
 
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.bitsBuffer, 0, bytesOf(&state.bitsetScratch))
