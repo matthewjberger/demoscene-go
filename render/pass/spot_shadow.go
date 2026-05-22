@@ -381,64 +381,6 @@ func spotShadowPrepare(s any, context *render.PassContext) error {
 	return nil
 }
 
-func spotShadowExecute(s any, context *render.PassContext) error {
-	state := s.(*spotShadowPassState)
-	shadow := state.shadow
-	if shadow.ActiveCount == 0 {
-		return nil
-	}
-
-	meshState, ok := findMeshPassState(context.World)
-	if !ok {
-		return nil
-	}
-	assets := ecs.MustResource[asset.MeshAssetsResource](context.World).Assets
-	lightMask := ecs.MustMaskOf[render.Light](context.World)
-
-	for index := uint32(0); index < shadow.ActiveCount; index++ {
-		slotX := (index % SpotShadowSlotsPerRow) * SpotShadowSlotSize
-		slotY := (index / SpotShadowSlotsPerRow) * SpotShadowSlotSize
-		var loadOp wgpu.LoadOp
-		if index == 0 {
-			loadOp = wgpu.LoadOpClear
-		} else {
-			loadOp = wgpu.LoadOpLoad
-		}
-		passEnc := context.Encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
-			Label: "spot shadow slot",
-			DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{
-				View:            shadow.AtlasView,
-				DepthLoadOp:     loadOp,
-				DepthStoreOp:    wgpu.StoreOpStore,
-				DepthClearValue: 1.0,
-			},
-		})
-		passEnc.SetPipeline(state.pipeline)
-		passEnc.SetViewport(float32(slotX), float32(slotY), float32(SpotShadowSlotSize), float32(SpotShadowSlotSize), 0, 1)
-		passEnc.SetScissorRect(slotX, slotY, SpotShadowSlotSize, SpotShadowSlotSize)
-		passEnc.SetBindGroup(0, state.slotBgs[index], nil)
-		for _, handle := range meshState.sortedHandles {
-			bucket := meshState.perHandle[handle]
-			entry, ok := assets.Lookup(handle)
-			if !ok {
-				continue
-			}
-			shadowBg, err := ensureShadowHandleBindGroup(bucket, context.Device, state.handleBgLayout)
-			if err != nil {
-				passEnc.End()
-				passEnc.Release()
-				return err
-			}
-			passEnc.SetBindGroup(1, shadowBg, nil)
-			passEnc.SetVertexBuffer(0, entry.Vertices, 0, wgpu.WholeSize)
-			drawNonLightInstances(passEnc, bucket, entry.VertexCount, lightMask, context.World)
-		}
-		passEnc.End()
-		passEnc.Release()
-	}
-	return nil
-}
-
 // drawNonLightInstances issues per-instance draws over a bucket,
 // skipping any instance whose ECS entity has a Light component.
 // Without this, the spotlight's own orb mesh (sitting at the
@@ -488,13 +430,4 @@ func spotPerspectiveZO(fovYRadians, aspect, near, far float32) mgl32.Mat4 {
 		0, 0, far / (near - far), -1,
 		0, 0, (far * near) / (near - far), 0,
 	}
-}
-
-// float32SliceBytes reinterprets a float32 slice as a byte slice
-// for buffer writes without copying.
-func float32SliceBytes(values []float32) []byte {
-	if len(values) == 0 {
-		return nil
-	}
-	return unsafe.Slice((*byte)(unsafe.Pointer(&values[0])), len(values)*4)
 }
