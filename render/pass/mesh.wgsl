@@ -104,6 +104,27 @@ struct ShadowUniforms {
 @group(1) @binding(10) var shadow_map:           texture_depth_2d_array;
 @group(1) @binding(11) var shadow_sampler:       sampler_comparison;
 
+struct SpotShadowEntry {
+    view_proj: mat4x4<f32>,
+    atlas_offset: vec2<f32>,
+    atlas_scale: vec2<f32>,
+    bias: f32,
+    enabled: u32,
+    _pad0: f32,
+    _pad1: f32,
+};
+
+struct SpotShadowUniforms {
+    entries: array<SpotShadowEntry, 4>,
+    count: u32,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
+};
+
+@group(1) @binding(12) var<uniform> spot_shadow_uniforms: SpotShadowUniforms;
+@group(1) @binding(13) var spot_shadow_atlas: texture_depth_2d;
+
 @group(2) @binding(0) var<storage, read> models:           array<mat4x4<f32>>;
 @group(2) @binding(1) var<storage, read> material_indices: array<u32>;
 @group(2) @binding(2) var<storage, read> entity_ids:       array<u32>;
@@ -360,6 +381,39 @@ fn get_cluster_index(frag_coord: vec2<f32>, view_depth: f32) -> u32 {
            clamped_slice * cluster_uniforms.cluster_count.x * cluster_uniforms.cluster_count.y;
 }
 
+// sample_spot_shadow projects the fragment's world position into
+// the spot light's view-projection (taken from
+// spot_shadow_uniforms.entries[shadow_index]), maps the resulting
+// clip-space xy into the slot's atlas region via atlas_offset +
+// atlas_scale, and compares depth via the comparison sampler.
+// Returns 1.0 = fully lit, 0.0 = fully shadowed. A small bias
+// nudges the sample forward to avoid self-shadow acne.
+fn sample_spot_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_index: i32) -> f32 {
+    if (shadow_index < 0 || u32(shadow_index) >= spot_shadow_uniforms.count) {
+        return 1.0;
+    }
+    let entry = spot_shadow_uniforms.entries[shadow_index];
+    if (entry.enabled == 0u) {
+        return 1.0;
+    }
+    let bias_offset = world_normal * 0.02;
+    let shadow_clip = entry.view_proj * vec4<f32>(world_pos + bias_offset, 1.0);
+    if (shadow_clip.w <= 0.0) {
+        return 1.0;
+    }
+    let shadow_ndc = shadow_clip.xyz / shadow_clip.w;
+    var slot_uv = vec2<f32>(shadow_ndc.x * 0.5 + 0.5, -shadow_ndc.y * 0.5 + 0.5);
+    if (slot_uv.x < 0.0 || slot_uv.x > 1.0 || slot_uv.y < 0.0 || slot_uv.y > 1.0) {
+        return 1.0;
+    }
+    if (shadow_ndc.z < 0.0 || shadow_ndc.z > 1.0) {
+        return 1.0;
+    }
+    let atlas_uv = entry.atlas_offset + slot_uv * entry.atlas_scale;
+    let depth = shadow_ndc.z - entry.bias;
+    return textureSampleCompareLevel(spot_shadow_atlas, shadow_sampler, atlas_uv, depth);
+}
+
 fn shade_one_light(light: Light, point_to_light: vec3<f32>, v: vec3<f32>, n: vec3<f32>, albedo: vec3<f32>, f0: vec3<f32>, metallic: f32, roughness: f32) -> vec3<f32> {
     let l = normalize(point_to_light);
     let h = normalize(v + l);
@@ -524,7 +578,11 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
         let light_idx = light_indices[base + i];
         let light = lights[cluster_uniforms.num_directional_lights + light_idx];
         let point_to_light = light.position.xyz - in.world_pos;
-        lo = lo + shade_one_light(light, point_to_light, v, n, albedo, f0, metallic, roughness);
+        var contribution = shade_one_light(light, point_to_light, v, n, albedo, f0, metallic, roughness);
+        if (light.light_type == LIGHT_TYPE_SPOT && light.shadow_index >= 0) {
+            contribution = contribution * sample_spot_shadow(in.world_pos, n, light.shadow_index);
+        }
+        lo = lo + contribution;
     }
 
     // Image-based ambient (split-sum approximation + multi-scatter

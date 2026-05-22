@@ -28,6 +28,8 @@ type Light struct {
 	Range          float32
 	InnerConeAngle float32
 	OuterConeAngle float32
+	CastShadows    bool
+	ShadowBias     float32
 }
 
 // MaxLights is the fixed-size cap on lights uploaded to the mesh

@@ -328,9 +328,17 @@ func meshRelease(s any) {
 func extractLights(world *ecs.World, scratch []LightGPU) []LightGPU {
 	out := scratch
 	out = out[:0]
+	var spotShadowEntities [MaxSpotShadows]ecs.Entity
+	var spotShadowCount uint32
+	if resource, ok := ecs.Resource[SpotShadowResource](world); ok && resource.Shadow != nil {
+		spotShadowCount = resource.Shadow.ActiveCount
+		for index := uint32(0); index < spotShadowCount; index++ {
+			spotShadowEntities[index] = resource.Shadow.slotEntity(index)
+		}
+	}
 	lightMask := ecs.MustMaskOf[render.Light](world)
 	globalMask := ecs.MustMaskOf[transform.GlobalTransform](world)
-	world.ForEach(lightMask|globalMask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
+	world.ForEach(lightMask|globalMask, 0, func(entity ecs.Entity, table *ecs.Archetype, index int) {
 		if uint32(len(out)) >= MaxLightsBuffer {
 			return
 		}
@@ -338,6 +346,15 @@ func extractLights(world *ecs.World, scratch []LightGPU) []LightGPU {
 		globals, _ := ecs.Column[transform.GlobalTransform](world, table)
 		light := &lights[index]
 		matrix := globals[index].Matrix
+		shadowIndex := int32(-1)
+		if light.Type == render.LightTypeSpot {
+			for slot := uint32(0); slot < spotShadowCount; slot++ {
+				if spotShadowEntities[slot] == entity {
+					shadowIndex = int32(slot)
+					break
+				}
+			}
+		}
 		out = append(out, LightGPU{
 			Position:    [4]float32{matrix[12], matrix[13], matrix[14], 1.0},
 			Direction:   [4]float32{-matrix[8], -matrix[9], -matrix[10], 0.0},
@@ -346,7 +363,7 @@ func extractLights(world *ecs.World, scratch []LightGPU) []LightGPU {
 			Range:       light.Range,
 			InnerCone:   cosOrZero(light.InnerConeAngle),
 			OuterCone:   cosOrZero(light.OuterConeAngle),
-			ShadowIndex: -1,
+			ShadowIndex: shadowIndex,
 			LightSize:   0,
 			CookieLayer: 0xFFFFFFFF,
 			Padding:     0,

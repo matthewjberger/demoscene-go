@@ -261,6 +261,8 @@ func spawnSpotOrb(worlds app.Worlds, orbMesh asset.MeshHandle, name string, posi
 		Range:          range_,
 		InnerConeAngle: innerCone,
 		OuterConeAngle: outerCone,
+		CastShadows:    true,
+		ShadowBias:     0.005,
 	})
 	ecs.Set(worlds.Engine, entity, app.Name{Value: name})
 }
