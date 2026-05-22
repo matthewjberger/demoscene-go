@@ -38,7 +38,7 @@ const menuPopupZ int32 = 100
 // menu is open.
 type menuPopup struct {
 	Panel ecs.Entity
-	Items [4]ecs.Entity
+	Items [8]ecs.Entity
 	Count int
 }
 
