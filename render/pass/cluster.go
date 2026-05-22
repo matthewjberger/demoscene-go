@@ -131,9 +131,6 @@ type clusterResources struct {
 	lightGridReset *wgpu.Buffer
 	lightIndices   *wgpu.Buffer
 	lights         *wgpu.Buffer
-
-	prevUniforms  ClusterUniforms
-	uniformsDirty bool
 }
 
 // newClusterResources allocates every cluster-side GPU buffer and

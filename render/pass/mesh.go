@@ -92,8 +92,6 @@ type meshPassState struct {
 	// reallocating the per-frame ClusterUniforms upload value.
 	clusterUniformsScratch ClusterUniforms
 	lightScratch           []LightGPU
-	prevScreenW            uint32
-	prevScreenH            uint32
 }
 
 // NewMeshPass builds the engine's instanced PBR mesh pass.
@@ -426,11 +424,7 @@ func meshPrepare(s any, context *render.PassContext) error {
 	numDirectional, numLocal := splitDirectionalAndLocal(state.lightScratch)
 
 	uniforms := buildClusterUniforms(camera, aspect, context, numDirectional, numLocal)
-	if uniforms != state.clusterUniformsScratch {
-		state.clusterUniformsScratch = uniforms
-		state.clusters.uniformsDirty = true
-		state.clusters.prevUniforms = uniforms
-	}
+	state.clusterUniformsScratch = uniforms
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.clusters.clusterUniforms, 0, bytesOf(&uniforms))
 
 	for _, event := range ecs.DrainEvents[ecs.EntityDespawned](context.World) {
