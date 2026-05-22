@@ -173,6 +173,11 @@ func installCanvasInputListeners(canvas js.Value, engine *ecs.World) {
 		button := event.Get("button").Int()
 		setMouseButton(engine, button, true)
 		if button == 0 {
+			if uiRef, ok := ecs.Resource[ui.WorldRef](engine); ok && uiRef != nil && uiRef.World != nil {
+				if uiPointer, ok := ecs.Resource[ui.PointerState](uiRef.World); ok && uiPointer != nil && uiPointer.OverUI {
+					return nil
+				}
+			}
 			picking := *ecs.MustResource[*pass.Picking](engine)
 			if picking != nil {
 				input := ecs.MustResource[render.Input](engine)

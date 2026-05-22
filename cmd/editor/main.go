@@ -171,6 +171,11 @@ func installInputCallbacks(glfwWindow *glfw.Window, engine *ecs.World) {
 		case glfw.MouseButtonLeft:
 			input.LeftDown = pressed
 			if pressed {
+				if uiRef, ok := ecs.Resource[ui.WorldRef](engine); ok && uiRef != nil && uiRef.World != nil {
+					if uiPointer, ok := ecs.Resource[ui.PointerState](uiRef.World); ok && uiPointer != nil && uiPointer.OverUI {
+						break
+					}
+				}
 				picking := *ecs.MustResource[*pass.Picking](engine)
 				if picking != nil {
 					altHeld := glfwWindow.GetKey(glfw.KeyLeftAlt) == glfw.Press || glfwWindow.GetKey(glfw.KeyRightAlt) == glfw.Press
