@@ -38,22 +38,23 @@ func initializeWorldEntities(worlds app.Worlds, meshes []asset.MeshHandle, meshN
 		ecs.MustMaskOf[render.Light](worlds.Engine) |
 		ecs.MustMaskOf[app.Name](worlds.Engine)
 
-	// Default sun: positioned above-right, rotated
-	// PI/4 yaw + -PI/6 pitch so the directional light angles down at
-	// the scene from the side, warm white color, intensity 5.
+	// Default sun: noon position. The light shines along
+	// normalize(0, -1, -0.3), so the sun sits up + slightly back.
+	// Pitch around X is atan2(0.3, 1) past straight-down, giving
+	// the same direction the reference editor uses at hour=12.
 	sun := worlds.Engine.Spawn(lightMask)
+	const sunPitch = -float32(math.Pi)/2.0 + 0.2914568 // atan2(0.3, 1)
 	sunTransform := transform.LocalTransform{
-		Translation: transform.Vec3{5, 10, 5},
-		Rotation: transform.QuatFromAxisAngle(float32(math.Pi/4), transform.Vec3{0, 1, 0}).
-			Mul(transform.QuatFromAxisAngle(-float32(math.Pi/6), transform.Vec3{1, 0, 0})),
-		Scale: transform.Vec3{1, 1, 1},
+		Translation: transform.Vec3{0, 100, -30},
+		Rotation:    transform.QuatFromAxisAngle(sunPitch, transform.Vec3{1, 0, 0}),
+		Scale:       transform.Vec3{1, 1, 1},
 	}
 	ecs.Set(worlds.Engine, sun, sunTransform)
 	ecs.Set(worlds.Engine, sun, transform.IdentityGlobalTransform())
 	ecs.Set(worlds.Engine, sun, render.Light{
 		Type:           render.LightTypeDirectional,
 		Color:          transform.Vec3{1.0, 0.95, 0.8},
-		Intensity:      5.0,
+		Intensity:      3.5,
 		Range:          100.0,
 		InnerConeAngle: float32(math.Pi / 6),
 		OuterConeAngle: float32(math.Pi / 4),
