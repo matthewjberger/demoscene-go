@@ -3,10 +3,8 @@
 // on wasm) writes into a [Window] resource stored on the ECS world;
 // systems read from the same resource.
 //
-// Only the data fields and a single free [Advance] function — no
-// methods, no hidden state, no platform handles. The platform
-// layer owns the actual OS window and feeds this resource each
-// frame.
+// The platform layer owns the actual OS window and feeds this
+// resource each frame via [Advance].
 package window
 
 // ViewportSize is the surface's pixel dimensions. Updated on resize.

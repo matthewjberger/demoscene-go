@@ -1,9 +1,8 @@
 // Package app is the data-oriented application lifecycle for an
 // indigo binary.
 //
-// Lifecycle hooks live as function-value fields on an [App] struct:
-// no interfaces, no vtables, no inheritance, just data. Applications
-// construct an [App] and hand it to the main loop.
+// Lifecycle hooks live as function-value fields on an [App] struct.
+// Applications construct an [App] and hand it to the main loop.
 //
 // Conventions:
 //   - Initialize runs once after the renderer is built.

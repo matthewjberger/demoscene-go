@@ -10,9 +10,8 @@ import (
 // caller can build trees with a fluent chain without manually
 // passing Entity values.
 //
-// Builder is intentionally plain Go: no codegen, no macros. The
-// entities it produces are ordinary ECS rows that any system can
-// query.
+// The entities Builder produces are ordinary ECS rows that any
+// system can query.
 //
 // Usage:
 //

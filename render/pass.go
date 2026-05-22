@@ -137,10 +137,9 @@ func (c *PassContext) DepthAttachment(slot string) (wgpu.RenderPassDepthStencilA
 	}, nil
 }
 
-// Pass is a data-oriented render-graph node. A pass is a struct of
-// fields the graph reads. State lives in [State] (any-typed so the
-// graph stays generic); per-pass logic is function values the graph
-// calls — no interfaces, no virtual dispatch.
+// Pass is a render-graph node. State lives in the [State] field
+// (any-typed so the graph stays generic); per-pass logic is
+// function values the graph calls.
 //
 // Reads and Writes declare slot names that must be wired to resources
 // before the graph compiles.

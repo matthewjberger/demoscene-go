@@ -20,11 +20,10 @@ import (
 // supply a closure; callers that only care about side effects
 // (caching, atlas warm-up) can pass nil.
 //
-// Strategic shape: this is the path that future async net /
-// disk-based glTF loads will use. The decode currently happens
-// inline because the engine has no worker threads yet; once a
-// worker pool lands, decode + staging move there and the queued
-// command only sees a finished CPU buffer ready for GPU upload.
+// Decode currently happens inline because the engine has no worker
+// threads yet; once a worker pool lands, decode + staging move
+// there and the queued command only sees a finished CPU buffer
+// ready for GPU upload.
 type LoadGltfBytes struct {
 	Label    string
 	Bytes    []byte

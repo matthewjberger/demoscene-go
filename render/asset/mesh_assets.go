@@ -19,6 +19,7 @@ type Primitives struct {
 	UnitTriangle MeshHandle
 	UnitQuad     MeshHandle
 	UnitCube     MeshHandle
+	UnitPlane    MeshHandle
 }
 
 // RegisterPrimitives uploads the unit triangle, quad, and cube into
@@ -38,7 +39,11 @@ func RegisterPrimitives(device *wgpu.Device, assets *MeshAssets) (Primitives, er
 	if err != nil {
 		return Primitives{}, err
 	}
-	return Primitives{UnitTriangle: tri, UnitQuad: quad, UnitCube: cube}, nil
+	plane, err := assets.Register(device, "unit_plane", UnitPlaneVertices)
+	if err != nil {
+		return Primitives{}, err
+	}
+	return Primitives{UnitTriangle: tri, UnitQuad: quad, UnitCube: cube, UnitPlane: plane}, nil
 }
 
 // MeshVertex is the input layout the engine's stock mesh shader
@@ -192,6 +197,48 @@ var UnitQuadVertices = []MeshVertex{
 	{Position: [4]float32{0.5, 0.5, 0.0, 1.0}, Normal: defaultNormalZ, Tangent: defaultTangent, UV: [4]float32{1, 0, 0, 0}, Color: [4]float32{0.0, 0.0, 1.0, 1.0}},
 	{Position: [4]float32{-0.5, 0.5, 0.0, 1.0}, Normal: defaultNormalZ, Tangent: defaultTangent, UV: [4]float32{0, 0, 0, 0}, Color: [4]float32{1.0, 1.0, 0.0, 1.0}},
 }
+
+// UnitPlaneVertices is a 1x1 horizontal plane on the XZ axes,
+// normal pointing +Y, white vertex color so the material's
+// BaseColor reads cleanly. Use this for ground planes / receivers
+// where the rainbow UnitQuad's per-corner color tint would
+// pollute the lit output.
+var UnitPlaneVertices = func() []MeshVertex {
+	const half = float32(0.5)
+	const up = float32(1.0)
+	normal := [4]float32{0, 1, 0, 0}
+	tangent := [4]float32{1, 0, 0, 1}
+	white := [4]float32{1, 1, 1, 1}
+	corners := [4][2]float32{
+		{-half, -half},
+		{half, -half},
+		{half, half},
+		{-half, half},
+	}
+	uvs := [4][4]float32{
+		{0, 1, 0, 0},
+		{1, 1, 0, 0},
+		{1, 0, 0, 0},
+		{0, 0, 0, 0},
+	}
+	verts := make([]MeshVertex, 0, 6)
+	add := func(i int) {
+		verts = append(verts, MeshVertex{
+			Position: [4]float32{corners[i][0], 0, corners[i][1], up},
+			Normal:   normal,
+			Tangent:  tangent,
+			UV:       uvs[i],
+			Color:    white,
+		})
+	}
+	add(0)
+	add(2)
+	add(1)
+	add(0)
+	add(3)
+	add(2)
+	return verts
+}()
 
 // UnitCubeVertices is a 1-unit cube centered at origin, 36 vertices
 // (6 faces x 2 triangles x 3 vertices), all wound CCW when viewed from
