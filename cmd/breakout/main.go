@@ -1,8 +1,7 @@
 //go:build !js
 
-// Command breakout is the engine's breakout-clone demo: a paddle, a
-// ball, and a wall of cubes rendered as 3D primitives through the
-// engine's render graph.
+// Command breakout is the engine's breakout-clone demo rendered
+// through the engine's render graph.
 package main
 
 import (

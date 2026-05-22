@@ -15,17 +15,17 @@ import (
 	"indigo/window"
 )
 
-// initializeWorldEntities spawns a 5x5 grid of engine entities
-// cycling through the supplied mesh handles for visual variety, plus
-// a matching game entity per engine entity carrying its Spinner state
-// and EngineEntity bridge. Also spawns a sun-like directional light
-// and a handful of small colored point + spot light "orbs" so the
-// clustered lighting pipeline has visible local lights to cull.
+// initializeWorldEntities populates the engine and game worlds for
+// the editor's demo scene. Engine entities get visual + transform
+// components; each engine entity has a paired game entity carrying
+// its Spinner state and an EngineEntity bridge. Light entities are
+// added so the clustered lighting and shadow paths have local
+// lights to cull and shadow casters.
 //
 // orbMesh is the mesh handle used for the visible body of each
-// orb (typically the unit cube primitive) — the orb's material is
-// marked unlit so the cube renders at its light's color regardless
-// of which other lights also illuminate it.
+// light orb; the orb's material is marked unlit so the mesh reads
+// at its light's color regardless of which other lights illuminate
+// it.
 func initializeWorldEntities(worlds app.Worlds, meshes []asset.MeshHandle, meshNames []string, orbMesh asset.MeshHandle) {
 	const (
 		gridExtent  = 3

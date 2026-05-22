@@ -23,9 +23,7 @@ import (
 //
 // Push runs every frame so the lines pass picks the data up next
 // draw. Frame-by-frame regeneration is fine for an interactive
-// debug overlay — the cost scales with total visible vertex count
-// (a few thousand for the helmet) which is well below interactive
-// frame budget.
+// debug overlay; cost scales with total visible vertex count.
 func UpdateNormalLines(world *ecs.World) {
 	settings, ok := ecs.Resource[render.GraphicsSettings](world)
 	if !ok || !settings.ShowNormals {

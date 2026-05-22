@@ -68,7 +68,7 @@ type MeshVertex struct {
 // CpuVertices keeps a copy of the source vertex slice so debug
 // passes (normal visualization) can transform per-vertex normals
 // into world space without round-tripping through a compute
-// shader. ~40 bytes per vertex; a 30k-vertex helmet costs ~1.2MB.
+// shader. Allocates roughly 40 bytes per vertex per mesh.
 type meshEntry struct {
 	Name        string
 	Vertices    *wgpu.Buffer

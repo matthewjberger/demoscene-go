@@ -1,8 +1,7 @@
 //go:build !js
 
-// Command indigo is the engine demo entry point: a grid of spinning
-// triangles driven by a dual-world ECS through the engine's render
-// graph, viewed through a pan-orbit camera.
+// Command indigo is the engine's editor: a dual-world ECS driving
+// the render graph through a pan-orbit camera.
 package main
 
 import (

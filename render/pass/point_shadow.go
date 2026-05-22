@@ -45,13 +45,18 @@ var pointShadowFaceAxes = [PointShadowFaces][2]mgl32.Vec3{
 }
 
 // PointShadow owns a cube-array R32Float texture (6*N layers,
-// each a face's normalized-distance image), one set of per-face
-// view-projection uniforms, and the mesh-side storage buffer of
-// per-light shadow data (position, range, bias).
+// each a face's normalized-distance image), a transient depth
+// texture used as the depth attachment while rendering any one
+// face (reused across all faces since faces never need each
+// other's depth), one set of per-face view-projection uniforms,
+// and the mesh-side storage buffer of per-light shadow data
+// (position, range, bias).
 type PointShadow struct {
 	Texture       *wgpu.Texture
 	CubeArrayView *wgpu.TextureView
 	FaceViews     [MaxPointShadows * PointShadowFaces]*wgpu.TextureView
+	DepthTexture  *wgpu.Texture
+	DepthView     *wgpu.TextureView
 	Sampler       *wgpu.Sampler
 	FaceUniform   *wgpu.Buffer
 	DataBuffer    *wgpu.Buffer
@@ -148,6 +153,29 @@ func NewPointShadow(device *wgpu.Device) (*PointShadow, error) {
 		}
 		shadow.FaceViews[index] = view
 	}
+
+	depthTex, err := device.CreateTexture(&wgpu.TextureDescriptor{
+		Label: "point shadow depth",
+		Size: wgpu.Extent3D{
+			Width:              PointShadowFaceSize,
+			Height:             PointShadowFaceSize,
+			DepthOrArrayLayers: 1,
+		},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     wgpu.TextureDimension2D,
+		Format:        wgpu.TextureFormatDepth32Float,
+		Usage:         wgpu.TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("point shadow: depth texture: %w", err)
+	}
+	shadow.DepthTexture = depthTex
+	depthView, err := depthTex.CreateView(nil)
+	if err != nil {
+		return nil, fmt.Errorf("point shadow: depth view: %w", err)
+	}
+	shadow.DepthView = depthView
 
 	sampler, err := device.CreateSampler(&wgpu.SamplerDescriptor{
 		Label:         "point shadow sampler",
@@ -280,9 +308,19 @@ func AddPointShadowPass(renderer *render.Renderer, shadow *PointShadow) (*render
 			}},
 		},
 		Primitive: wgpu.PrimitiveState{
-			Topology:  wgpu.PrimitiveTopologyTriangleList,
-			CullMode:  wgpu.CullModeNone,
-			FrontFace: wgpu.FrontFaceCCW,
+			Topology: wgpu.PrimitiveTopologyTriangleList,
+			CullMode: wgpu.CullModeBack,
+			// Y-flip in the projection inverts triangle winding from
+			// the rasterizer's perspective; with FrontFaceCw the
+			// original CCW-front meshes still get culled correctly.
+			FrontFace: wgpu.FrontFaceCW,
+		},
+		DepthStencil: &wgpu.DepthStencilState{
+			Format:            wgpu.TextureFormatDepth32Float,
+			DepthWriteEnabled: true,
+			DepthCompare:      wgpu.CompareFunctionLess,
+			StencilFront:      wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
+			StencilBack:       wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
 		},
 		Multisample: wgpu.MultisampleState{Count: 1, Mask: 0xFFFFFFFF},
 		Fragment: &wgpu.FragmentState{
@@ -453,6 +491,12 @@ func pointShadowExecute(s any, context *render.PassContext) error {
 					StoreOp:    wgpu.StoreOpStore,
 					ClearValue: wgpu.Color{R: 1.0, G: 1.0, B: 1.0, A: 1.0},
 				}},
+				DepthStencilAttachment: &wgpu.RenderPassDepthStencilAttachment{
+					View:            shadow.DepthView,
+					DepthLoadOp:     wgpu.LoadOpClear,
+					DepthStoreOp:    wgpu.StoreOpStore,
+					DepthClearValue: 1.0,
+				},
 			})
 			passEnc.SetPipeline(state.pipeline)
 			passEnc.SetBindGroup(0, state.faceBgs[layer], nil)
