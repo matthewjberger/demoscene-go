@@ -214,6 +214,8 @@ func (r *Renderer) Reconfigure() {
 // world) so the main loop's call site reads consistently with the
 // scheduler.
 func RenderFrame(r *Renderer, world *ecs.World) error {
+	DrainRenderCommands(world, r)
+
 	surfaceTexture, err := r.Surface.GetCurrentTexture()
 	if err != nil {
 		return wrapSurfaceErr(err)

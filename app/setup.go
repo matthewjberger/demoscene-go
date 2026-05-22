@@ -86,6 +86,8 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	ecs.SetResource(engine, render.NewInput())
 	ecs.SetResource(engine, render.DefaultGraphicsSettings())
 	ecs.SetResource(engine, transform.NewTransformState())
+	ecs.SetResource(engine, ecs.EcsCommandQueueResource{})
+	ecs.SetResource(engine, render.RenderCommandQueueResource{})
 	return engine, nil
 }
 
@@ -163,6 +165,7 @@ func TickFrame(worlds Worlds, hooks *App, delta float32) {
 		}
 	}
 
+	ecs.ProcessEcsCommands(worlds.Engine)
 	worlds.Engine.ApplyCommands()
 	worlds.Game.ApplyCommands()
 	if worlds.UI != nil {
