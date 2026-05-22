@@ -44,6 +44,18 @@ fn tonemap_aces(color: vec3<f32>) -> vec3<f32> {
     return clamp((color * (a * color + b)) / (color * (c * color + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
+// linear_to_srgb encodes a linear color into sRGB transfer space.
+// The renderer selects a non-sRGB swapchain format so the GPU
+// doesn't apply gamma automatically; we apply the IEC 61966-2-1
+// piecewise curve here so the display sees correctly-encoded
+// pixels regardless of the chosen surface format.
+fn linear_to_srgb(linear: vec3<f32>) -> vec3<f32> {
+    let cutoff = step(linear, vec3<f32>(0.0031308));
+    let lower = linear * 12.92;
+    let higher = 1.055 * pow(max(linear, vec3<f32>(0.0)), vec3<f32>(1.0/2.4)) - 0.055;
+    return mix(higher, lower, cutoff);
+}
+
 @fragment
 fn fragment_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let hdr = textureSample(hdr_texture, hdr_sampler, in.uv);
@@ -53,5 +65,6 @@ fn fragment_main(in: VertexOutput) -> @location(0) vec4<f32> {
         color = color + bloom * u.bloom_intensity;
     }
     let exposed = color * u.exposure;
-    return vec4<f32>(tonemap_aces(exposed), hdr.a);
+    let tonemapped = tonemap_aces(exposed);
+    return vec4<f32>(linear_to_srgb(tonemapped), hdr.a);
 }

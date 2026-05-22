@@ -92,6 +92,7 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	ecs.SetResource(engine, primitives)
 	ecs.SetResource(engine, render.NewInput())
 	ecs.SetResource(engine, render.DefaultGraphicsSettings())
+	ecs.SetResource(engine, render.DefaultPostProcessSettings())
 	ecs.SetResource(engine, transform.NewTransformState())
 	ecs.SetResource(engine, ecs.EcsCommandQueueResource{})
 	ecs.SetResource(engine, render.RenderCommandQueueResource{})

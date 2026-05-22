@@ -7,6 +7,7 @@ import (
 
 	"github.com/cogentcore/webgpu/wgpu"
 
+	"indigo/ecs"
 	"indigo/render"
 )
 
@@ -198,9 +199,14 @@ func NewPostProcessPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, b
 func postprocessPrepare(s any, context *render.PassContext) error {
 	state := s.(*postprocessPassState)
 
+	settings := render.DefaultPostProcessSettings()
+	if resource, ok := ecs.Resource[render.PostProcessSettings](context.World); ok {
+		settings = *resource
+	}
+
 	bloomView := state.dummyView
 	bloomEnabled := float32(0.0)
-	if state.bloom != nil {
+	if settings.BloomEnabled && state.bloom != nil {
 		if view := BloomMipView(state.bloom); view != nil {
 			bloomView = view
 			bloomEnabled = 1.0
@@ -208,8 +214,8 @@ func postprocessPrepare(s any, context *render.PassContext) error {
 	}
 
 	uniform := postprocessUniform{
-		Exposure:       1.0,
-		BloomIntensity: 0.04,
+		Exposure:       settings.Exposure,
+		BloomIntensity: settings.BloomIntensity,
 		BloomEnabled:   bloomEnabled,
 	}
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.uniformBuffer, 0, bytesOf(&uniform))
