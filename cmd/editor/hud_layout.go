@@ -101,7 +101,7 @@ func buildHud(world *ecs.World) HudHandles {
 	}).Color(ui.Color{RGBA: [4]float32{0.08, 0.09, 0.12, 1}}).Entity()
 
 	menuBar := b.Node(ui.Node{
-		X: hudLeftPanelWidth, Y: 0,
+		X: 0, Y: 0,
 		Width: 280, Height: hudTopBarHeight,
 		Anchor:  ui.AnchorTopLeft,
 		Layout:  ui.LayoutRow,
@@ -206,12 +206,11 @@ func buildHud(world *ecs.World) HudHandles {
 	// paint over the open popup's items.
 	const buttonOffset float32 = 6
 	const buttonStride float32 = 64 + 4
-	menuBarX := hudLeftPanelWidth
-	h.FileMenu = buildMenuPopup(b, menuBarX+buttonOffset+0*buttonStride, hudTopBarHeight,
+	h.FileMenu = buildMenuPopup(b, buttonOffset+0*buttonStride, hudTopBarHeight,
 		[]string{"NEW SCENE", "OPEN", "SAVE", "QUIT"})
-	h.EditMenu = buildMenuPopup(b, menuBarX+buttonOffset+1*buttonStride, hudTopBarHeight,
+	h.EditMenu = buildMenuPopup(b, buttonOffset+1*buttonStride, hudTopBarHeight,
 		[]string{"UNDO", "REDO", "DESELECT"})
-	h.ViewMenu = buildMenuPopup(b, menuBarX+buttonOffset+2*buttonStride, hudTopBarHeight,
+	h.ViewMenu = buildMenuPopup(b, buttonOffset+2*buttonStride, hudTopBarHeight,
 		[]string{"RESET CAMERA", "TOGGLE GRID", "TOGGLE SKY", "TOGGLE BOUNDS"})
 	h.ContextMenu = buildMenuPopup(b, 0, 0,
 		[]string{"DELETE"})

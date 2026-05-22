@@ -376,18 +376,24 @@ func textCovered(textBounds ui.Rect, textZ int32, occluders []opaqueQuad) bool {
 		if q.z <= textZ {
 			continue
 		}
-		if rectsOverlap(textBounds, q.rect) {
+		if rectContains(q.rect, textBounds) {
 			return true
 		}
 	}
 	return false
 }
 
-func rectsOverlap(a, b ui.Rect) bool {
-	return a.X < b.X+b.Width &&
-		a.X+a.Width > b.X &&
-		a.Y < b.Y+b.Height &&
-		a.Y+a.Height > b.Y
+// rectContains reports whether outer fully encloses inner. Used by
+// the text occlusion test: a label is only dropped when an opaque
+// higher-z rect covers every pixel it would draw to. Partial
+// overlap (text spilling past an occluder's edge) used to drop
+// the whole label, which hid hierarchy-row labels the moment they
+// poked into an open dropdown's X range.
+func rectContains(outer, inner ui.Rect) bool {
+	return outer.X <= inner.X &&
+		outer.Y <= inner.Y &&
+		outer.X+outer.Width >= inner.X+inner.Width &&
+		outer.Y+outer.Height >= inner.Y+inner.Height
 }
 
 func sortTextBatches(scratch []uiTextGlyphInstance, batches []textGlyphBatch) {
