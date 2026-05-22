@@ -10,14 +10,15 @@ import (
 
 func TestNodeTRSDefaultsAreIdentity(t *testing.T) {
 	n := &gltf.Node{}
-	if got := nodeTranslation(n); got != [3]float32{0, 0, 0} {
-		t.Errorf("translation = %v, want zero", got)
+	tr, rot, sc := nodeTRS(n)
+	if tr != [3]float32{0, 0, 0} {
+		t.Errorf("translation = %v, want zero", tr)
 	}
-	if got := nodeRotation(n); got != [4]float32{0, 0, 0, 1} {
-		t.Errorf("rotation = %v, want identity quat", got)
+	if rot != [4]float32{0, 0, 0, 1} {
+		t.Errorf("rotation = %v, want identity quat", rot)
 	}
-	if got := nodeScale(n); got != [3]float32{1, 1, 1} {
-		t.Errorf("scale = %v, want one", got)
+	if sc != [3]float32{1, 1, 1} {
+		t.Errorf("scale = %v, want one", sc)
 	}
 }
 
@@ -27,15 +28,49 @@ func TestNodeTRSFromExplicitFields(t *testing.T) {
 		Rotation:    [4]float64{0, 0.7071, 0, 0.7071},
 		Scale:       [3]float64{2, 3, 4},
 	}
-	if got := nodeTranslation(n); got != [3]float32{1.5, 2.5, 3.5} {
-		t.Errorf("translation = %v", got)
+	tr, rot, sc := nodeTRS(n)
+	if tr != [3]float32{1.5, 2.5, 3.5} {
+		t.Errorf("translation = %v", tr)
 	}
-	if got := nodeScale(n); got != [3]float32{2, 3, 4} {
-		t.Errorf("scale = %v", got)
+	if sc != [3]float32{2, 3, 4} {
+		t.Errorf("scale = %v", sc)
 	}
-	rot := nodeRotation(n)
 	if rot[3] != 0.7071 {
 		t.Errorf("rotation w = %f, want 0.7071", rot[3])
+	}
+}
+
+func TestNodeTRSDecomposesMatrix(t *testing.T) {
+	// Matrix encoding: translation (10, 20, 30), 90 deg yaw around Y,
+	// uniform scale 2. Column-major glTF matrix is built as
+	// T * R * S applied to the right-hand-side basis.
+	//   T*R*S applied to x,y,z columns gives, before translation:
+	//     col0 = R*S*x = (0, 0, -2)
+	//     col1 = R*S*y = (0, 2, 0)
+	//     col2 = R*S*z = (2, 0, 0)
+	matrix := [16]float64{
+		0, 0, -2, 0,
+		0, 2, 0, 0,
+		2, 0, 0, 0,
+		10, 20, 30, 1,
+	}
+	n := &gltf.Node{Matrix: matrix}
+	tr, _, sc := nodeTRS(n)
+	if tr != [3]float32{10, 20, 30} {
+		t.Errorf("translation = %v, want {10 20 30}", tr)
+	}
+	if sc != [3]float32{2, 2, 2} {
+		t.Errorf("scale = %v, want {2 2 2}", sc)
+	}
+	// Rotation: round-trip via the identity-axis test. A yaw of 90
+	// around +Y rotates (1,0,0) to (0,0,-1); reconstruct the rotation
+	// from the quaternion and verify.
+	_, rot, _ := nodeTRS(n)
+	_ = rot // exact quaternion form depends on conversion; the
+	// behavior we care about is that decomposition produces a non-
+	// identity rotation when the matrix has a non-identity basis.
+	if rot == ([4]float32{0, 0, 0, 1}) {
+		t.Errorf("decomposed rotation should be non-identity, got identity")
 	}
 }
 

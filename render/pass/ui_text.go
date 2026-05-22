@@ -248,9 +248,6 @@ func uiTextPrepare(s any, context *render.PassContext) error {
 		if text.Content == "" || !visibleInClip(node) {
 			return
 		}
-		if textCovered(node.Resolved, node.ZIndex, occluders) {
-			return
-		}
 		scale := text.Scale
 		if scale <= 0 {
 			scale = 1
@@ -262,6 +259,10 @@ func uiTextPrepare(s any, context *render.PassContext) error {
 		labelWidth := float32(len([]rune(text.Content))) * advance
 		originX := node.Resolved.X + (node.Resolved.Width-labelWidth)*0.5
 		originY := node.Resolved.Y + (node.Resolved.Height-glyphH)*0.5
+		glyphRect := ui.Rect{X: originX, Y: originY, Width: labelWidth, Height: glyphH}
+		if textCovered(glyphRect, node.ZIndex, occluders) {
+			return
+		}
 
 		startIdx := len(state.scratch)
 		cursor := originX

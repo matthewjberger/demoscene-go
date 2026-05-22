@@ -173,11 +173,12 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 
 	scene.Nodes = make([]SceneNode, len(doc.Nodes))
 	for i, node := range doc.Nodes {
+		translation, rotation, scale := nodeTRS(node)
 		out := SceneNode{
 			Name:        node.Name,
-			Translation: nodeTranslation(node),
-			Rotation:    nodeRotation(node),
-			Scale:       nodeScale(node),
+			Translation: translation,
+			Rotation:    rotation,
+			Scale:       scale,
 			Children:    childIndicesOf(node),
 		}
 		if node.Mesh != nil {
@@ -276,28 +277,76 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene) []ecs.Entity {
 	return entities
 }
 
-func nodeTranslation(node *gltf.Node) [3]float32 {
+// identityNodeMatrix is the column-major identity matrix qmuntal/gltf
+// fills in for unspecified node.Matrix fields. Used to detect when a
+// node's transform actually lives in the Matrix slot vs. when it
+// lives in the TRS slots and Matrix is just default-populated.
+var identityNodeMatrix = [16]float64{
+	1, 0, 0, 0,
+	0, 1, 0, 0,
+	0, 0, 1, 0,
+	0, 0, 0, 1,
+}
+
+// nodeTRS returns the node's TRS as three components. glTF lets a
+// node specify its transform two ways: a 4x4 Matrix field, or the
+// separate Translation / Rotation / Scale fields. The qmuntal/gltf
+// decoder always populates both — Matrix is set to identity when
+// the JSON only specifies TRS, and TRS is set to defaults when the
+// JSON only specifies Matrix. We check for a non-identity Matrix
+// first; if it's identity, the real transform lives in the TRS
+// slots.
+func nodeTRS(node *gltf.Node) (translation [3]float32, rotation [4]float32, scale [3]float32) {
+	if node.Matrix != identityNodeMatrix && node.Matrix != [16]float64{} {
+		return decomposeMatrix(node.Matrix)
+	}
+	translation = [3]float32{0, 0, 0}
 	if node.Translation != [3]float64{} {
-		return [3]float32{float32(node.Translation[0]), float32(node.Translation[1]), float32(node.Translation[2])}
+		translation = [3]float32{float32(node.Translation[0]), float32(node.Translation[1]), float32(node.Translation[2])}
 	}
-	if node.Matrix != [16]float64{} {
-		return [3]float32{float32(node.Matrix[12]), float32(node.Matrix[13]), float32(node.Matrix[14])}
-	}
-	return [3]float32{0, 0, 0}
-}
-
-func nodeRotation(node *gltf.Node) [4]float32 {
+	rotation = [4]float32{0, 0, 0, 1}
 	if node.Rotation != [4]float64{} {
-		return [4]float32{float32(node.Rotation[0]), float32(node.Rotation[1]), float32(node.Rotation[2]), float32(node.Rotation[3])}
+		rotation = [4]float32{float32(node.Rotation[0]), float32(node.Rotation[1]), float32(node.Rotation[2]), float32(node.Rotation[3])}
 	}
-	return [4]float32{0, 0, 0, 1}
+	scale = [3]float32{1, 1, 1}
+	if node.Scale != [3]float64{} {
+		scale = [3]float32{float32(node.Scale[0]), float32(node.Scale[1]), float32(node.Scale[2])}
+	}
+	return
 }
 
-func nodeScale(node *gltf.Node) [3]float32 {
-	if node.Scale != [3]float64{} {
-		return [3]float32{float32(node.Scale[0]), float32(node.Scale[1]), float32(node.Scale[2])}
+// decomposeMatrix splits a column-major 4x4 affine TRS matrix into
+// its translation, rotation, and scale components. Translation
+// lives in the fourth column. Scale magnitudes are the lengths of
+// the first three columns; the columns are then renormalized into
+// a pure rotation matrix which is converted to a quaternion.
+// Assumes no shear (glTF matrices are required to be decomposable).
+func decomposeMatrix(matrix [16]float64) (translation [3]float32, rotation [4]float32, scale [3]float32) {
+	translation = [3]float32{float32(matrix[12]), float32(matrix[13]), float32(matrix[14])}
+
+	col0 := mgl32.Vec3{float32(matrix[0]), float32(matrix[1]), float32(matrix[2])}
+	col1 := mgl32.Vec3{float32(matrix[4]), float32(matrix[5]), float32(matrix[6])}
+	col2 := mgl32.Vec3{float32(matrix[8]), float32(matrix[9]), float32(matrix[10])}
+	scale = [3]float32{col0.Len(), col1.Len(), col2.Len()}
+	if scale[0] == 0 {
+		scale[0] = 1
 	}
-	return [3]float32{1, 1, 1}
+	if scale[1] == 0 {
+		scale[1] = 1
+	}
+	if scale[2] == 0 {
+		scale[2] = 1
+	}
+
+	rot := mgl32.Mat4{
+		col0[0] / scale[0], col0[1] / scale[0], col0[2] / scale[0], 0,
+		col1[0] / scale[1], col1[1] / scale[1], col1[2] / scale[1], 0,
+		col2[0] / scale[2], col2[1] / scale[2], col2[2] / scale[2], 0,
+		0, 0, 0, 1,
+	}
+	quat := mgl32.Mat4ToQuat(rot)
+	rotation = [4]float32{quat.V[0], quat.V[1], quat.V[2], quat.W}
+	return
 }
 
 func childIndicesOf(node *gltf.Node) []int {

@@ -48,6 +48,24 @@ func AxisDirection(axis uint8) mgl32.Vec3 {
 	}
 }
 
+// LocalAxes returns the three normalized rotation columns of a
+// world-space matrix. Used by the gizmo to orient its arrows along
+// the selected entity's local X / Y / Z axes so the handles rotate
+// with the entity. Falls back to world axes when the matrix has a
+// degenerate (zero-length) column.
+func LocalAxes(matrix mgl32.Mat4) [3]mgl32.Vec3 {
+	var axes [3]mgl32.Vec3
+	for axis := 0; axis < 3; axis++ {
+		col := mgl32.Vec3{matrix[axis*4+0], matrix[axis*4+1], matrix[axis*4+2]}
+		if col.Len() > 0 {
+			axes[axis] = col.Normalize()
+		} else {
+			axes[axis] = AxisDirection(uint8(axis))
+		}
+	}
+	return axes
+}
+
 // SelectedTarget returns the first entity carrying a [render.Selected]
 // tag, or the zero entity if nothing is selected.
 func SelectedTarget(world *ecs.World) (ecs.Entity, bool) {
@@ -66,7 +84,7 @@ func SelectedTarget(world *ecs.World) (ecs.Entity, bool) {
 // GizmoScreenPositions projects the entity origin and the three
 // axis endpoints into screen space. The bool per axis is false if
 // the endpoint landed behind the camera.
-func GizmoScreenPositions(origin mgl32.Vec3, viewProj mgl32.Mat4, viewport [2]float32, worldLength float32) (mgl32.Vec2, [3]mgl32.Vec2, [3]bool) {
+func GizmoScreenPositions(origin mgl32.Vec3, axes [3]mgl32.Vec3, viewProj mgl32.Mat4, viewport [2]float32, worldLength float32) (mgl32.Vec2, [3]mgl32.Vec2, [3]bool) {
 	originScreen, originValid := projectWorld(origin, viewProj, viewport)
 	var ends [3]mgl32.Vec2
 	var valid [3]bool
@@ -74,7 +92,7 @@ func GizmoScreenPositions(origin mgl32.Vec3, viewProj mgl32.Mat4, viewport [2]fl
 		return originScreen, ends, valid
 	}
 	for axis := 0; axis < 3; axis++ {
-		dir := AxisDirection(uint8(axis))
+		dir := axes[axis]
 		end := mgl32.Vec3{
 			origin.X() + dir.X()*worldLength,
 			origin.Y() + dir.Y()*worldLength,

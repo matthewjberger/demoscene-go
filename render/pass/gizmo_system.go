@@ -67,14 +67,15 @@ func UpdateGizmos(world *ecs.World) {
 		gizmo.HoverAxis = -1
 		return
 	}
-	originScreen, ends, valid := GizmoScreenPositions(origin, viewProj, viewport, worldLength)
+	axes := LocalAxes(global.Matrix)
+	originScreen, ends, valid := GizmoScreenPositions(origin, axes, viewProj, viewport, worldLength)
 
 	mousePos := mgl32.Vec2{input.MousePosition[0], input.MousePosition[1]}
 	hoverAxis := -1
 	bestDist := gizmoAxisHitThresholdPx
 	if gizmo.Mode == render.GizmoRotate {
 		for i := 0; i < 3; i++ {
-			points, validPts := RingScreenPoints(origin, AxisDirection(uint8(i)), worldLength, viewProj, viewport)
+			points, validPts := RingScreenPoints(origin, axes[i], worldLength, viewProj, viewport)
 			for sample := 0; sample < RingSegmentCount; sample++ {
 				if !validPts[sample] || !validPts[sample+1] {
 					continue
@@ -103,7 +104,7 @@ func UpdateGizmos(world *ecs.World) {
 	if leftJustDown && hoverAxis >= 0 && !gizmo.Dragging {
 		local, ok := ecs.Get[transform.LocalTransform](world, target)
 		if ok && valid[hoverAxis] {
-			axisDir := AxisDirection(uint8(hoverAxis))
+			axisDir := axes[hoverAxis]
 			started := false
 			initialT := float32(0)
 			startVec := mgl32.Vec3{}

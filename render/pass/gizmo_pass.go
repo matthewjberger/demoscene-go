@@ -181,7 +181,8 @@ func gizmoPrepare(s any, context *render.PassContext) error {
 	if worldLength <= 0 {
 		return nil
 	}
-	originScreen, ends, valid := GizmoScreenPositions(origin, viewProj, viewport, worldLength)
+	axes := LocalAxes(global.Matrix)
+	originScreen, ends, valid := GizmoScreenPositions(origin, axes, viewProj, viewport, worldLength)
 
 	if gizmo.Mode == render.GizmoRotate {
 		for axis := 0; axis < 3; axis++ {
@@ -191,7 +192,7 @@ func gizmoPrepare(s any, context *render.PassContext) error {
 				color = AxisHoverColor
 				thickness = gizmoAxisHoverThicknessPx
 			}
-			points, validPts := RingScreenPoints(origin, AxisDirection(uint8(axis)), worldLength, viewProj, viewport)
+			points, validPts := RingScreenPoints(origin, axes[axis], worldLength, viewProj, viewport)
 			for sample := 0; sample < RingSegmentCount; sample++ {
 				if !validPts[sample] || !validPts[sample+1] {
 					continue

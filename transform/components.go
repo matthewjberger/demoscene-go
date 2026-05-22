@@ -62,11 +62,47 @@ func AsMatrix(t *LocalTransform) Mat4 {
 	return matrix
 }
 
+// Forward returns the transform's local -Z axis rotated by its
+// rotation quaternion. By the glTF / camera convention, -Z is the
+// direction the entity is facing.
+func (t LocalTransform) Forward() Vec3 {
+	return t.Rotation.Rotate(Vec3{0, 0, -1})
+}
+
+// Right returns the transform's local +X axis rotated by its
+// rotation quaternion.
+func (t LocalTransform) Right() Vec3 {
+	return t.Rotation.Rotate(Vec3{1, 0, 0})
+}
+
+// Up returns the transform's local +Y axis rotated by its rotation
+// quaternion.
+func (t LocalTransform) Up() Vec3 {
+	return t.Rotation.Rotate(Vec3{0, 1, 0})
+}
+
 // GlobalTransform is the world-space matrix the renderer reads.
 // Maintained by [UpdateGlobalTransforms]; never set directly outside
 // the propagation system.
 type GlobalTransform struct {
 	Matrix Mat4
+}
+
+// Forward returns the world-space -Z axis of g (the basis column
+// extracted from the world matrix). Matches [LocalTransform.Forward]
+// after parent propagation.
+func (g GlobalTransform) Forward() Vec3 {
+	return Vec3{-g.Matrix[8], -g.Matrix[9], -g.Matrix[10]}.Normalize()
+}
+
+// Right returns the world-space +X axis of g.
+func (g GlobalTransform) Right() Vec3 {
+	return Vec3{g.Matrix[0], g.Matrix[1], g.Matrix[2]}.Normalize()
+}
+
+// Up returns the world-space +Y axis of g.
+func (g GlobalTransform) Up() Vec3 {
+	return Vec3{g.Matrix[4], g.Matrix[5], g.Matrix[6]}.Normalize()
 }
 
 // GlobalTransformTranslation extracts the translation column from a
