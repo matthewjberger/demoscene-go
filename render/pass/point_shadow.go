@@ -385,7 +385,19 @@ func pointShadowPrepare(s any, context *render.PassContext) error {
 		if rangeValue < 0.5 {
 			rangeValue = 0.5
 		}
-		proj := spotPerspectiveZO(float32(math.Pi/2), 1.0, 0.1, rangeValue)
+		baseProj := spotPerspectiveZO(float32(math.Pi/2), 1.0, 0.1, rangeValue)
+		// WebGPU cubemap faces are authored with Y pointing down
+		// relative to the world-space face directions; flip Y in
+		// the projection so the rendered face matches the cube
+		// layout the hardware samples from by direction. Matches
+		// the reference engine's Y_FLIP_MATRIX * base_projection.
+		yFlip := mgl32.Mat4{
+			1, 0, 0, 0,
+			0, -1, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1,
+		}
+		proj := yFlip.Mul4(baseProj)
 		for face := 0; face < PointShadowFaces; face++ {
 			axes := pointShadowFaceAxes[face]
 			forward := axes[0]
