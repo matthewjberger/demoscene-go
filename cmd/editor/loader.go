@@ -16,6 +16,7 @@ import (
 	"indigo/ecs"
 	"indigo/render"
 	"indigo/render/asset"
+	"indigo/transform"
 )
 
 // defaultGltf is the .glb the editor auto-loads at startup so the
@@ -76,7 +77,7 @@ func spawnLoadedSceneNamed(engine *ecs.World, scene *asset.LoadedScene, label st
 	log.Printf("gltf loaded: %s (%d nodes, %d meshes, %d materials, %d animations)",
 		label, len(scene.Nodes), len(scene.Meshes), len(scene.Materials), len(scene.Animations))
 	if len(scene.Roots) > 0 {
-		applyEntitySelection(engine, entities[scene.Roots[0]])
+		applyEntitySelection(engine, transform.FindGroupRoot(engine, entities[scene.Roots[0]]))
 	}
 	return entities, nil
 }
