@@ -63,7 +63,7 @@ func spawnBreakoutScene(worlds app.Worlds, palette brickPalette) {
 	ecs.Set(worlds.Engine, paddleEngine, paddleLocal)
 	ecs.Set(worlds.Engine, paddleEngine, transform.IdentityGlobalTransform())
 	ecs.Set(worlds.Engine, paddleEngine, asset.RenderMesh{Mesh: palette.Cube})
-	ecs.Set(worlds.Engine, paddleEngine, asset.Material{BaseColor: palette.Paddle})
+	ecs.Set(worlds.Engine, paddleEngine, asset.AlbedoMaterial(palette.Paddle))
 
 	paddleGame := worlds.Game.Spawn(paddleMask)
 	ecs.Set(worlds.Game, paddleGame, Paddle{
@@ -80,7 +80,7 @@ func spawnBreakoutScene(worlds app.Worlds, palette brickPalette) {
 	ecs.Set(worlds.Engine, ballEngine, ballLocal)
 	ecs.Set(worlds.Engine, ballEngine, transform.IdentityGlobalTransform())
 	ecs.Set(worlds.Engine, ballEngine, asset.RenderMesh{Mesh: palette.Cube})
-	ecs.Set(worlds.Engine, ballEngine, asset.Material{BaseColor: palette.Ball})
+	ecs.Set(worlds.Engine, ballEngine, asset.AlbedoMaterial(palette.Ball))
 
 	ballGame := worlds.Game.Spawn(ballMask)
 	ecs.Set(worlds.Game, ballGame, Ball{
@@ -108,7 +108,7 @@ func spawnBreakoutScene(worlds app.Worlds, palette brickPalette) {
 			ecs.Set(worlds.Engine, engineEntity, local)
 			ecs.Set(worlds.Engine, engineEntity, transform.IdentityGlobalTransform())
 			ecs.Set(worlds.Engine, engineEntity, asset.RenderMesh{Mesh: palette.Cube})
-			ecs.Set(worlds.Engine, engineEntity, asset.Material{BaseColor: rowColor})
+			ecs.Set(worlds.Engine, engineEntity, asset.AlbedoMaterial(rowColor))
 
 			gameEntity := worlds.Game.Spawn(brickMask)
 			ecs.Set(worlds.Game, gameEntity, Brick{

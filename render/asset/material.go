@@ -36,6 +36,13 @@ type Material struct {
 	AlphaCutoff float32
 	DoubleSided bool
 	Unlit       bool
+
+	// IOR is the surface's index of refraction, used to derive
+	// the dielectric F0 in the PBR fresnel term:
+	//   F0_dielectric = ((ior - 1) / (ior + 1))^2
+	// Default 1.5 matches the glTF spec when KHR_materials_ior is
+	// absent. KHR_materials_ior sets this to the asset's value.
+	IOR float32
 }
 
 // DefaultMaterial returns a fully-opaque white material with the
@@ -55,7 +62,19 @@ func DefaultMaterial() Material {
 		NormalScale:            1.0,
 		OcclusionStrength:      1.0,
 		AlphaCutoff:            0.5,
+		IOR:                    1.5,
 	}
+}
+
+// AlbedoMaterial returns a fully-opaque, matte material tinted to
+// color. Convenience helper for code that only wants to set the
+// base color (e.g., a primitive cube with a flat paint job) and
+// would otherwise have to fill in every roughness / metallic /
+// layer sentinel by hand.
+func AlbedoMaterial(color [4]float32) Material {
+	m := DefaultMaterial()
+	m.BaseColor = color
+	return m
 }
 
 // MaterialGPU is the std430-aligned per-material struct the mesh
@@ -80,7 +99,7 @@ type MaterialGPU struct {
 	RoughnessFactor float32 // row 4
 	AlphaCutoff     float32
 	Unlit           uint32
-	Pad0            uint32
+	IOR             float32
 
 	Pad1 [4]float32 // row 5 (reserved for future PBR extensions)
 }
@@ -104,6 +123,10 @@ func (m Material) ToGPU() MaterialGPU {
 	if m.Unlit {
 		unlit = 1
 	}
+	ior := m.IOR
+	if ior <= 0 {
+		ior = 1.5
+	}
 	return MaterialGPU{
 		BaseColor:              m.BaseColor,
 		EmissiveFactor:         m.EmissiveFactor,
@@ -119,5 +142,6 @@ func (m Material) ToGPU() MaterialGPU {
 		RoughnessFactor:        m.RoughnessFactor,
 		AlphaCutoff:            m.AlphaCutoff,
 		Unlit:                  unlit,
+		IOR:                    ior,
 	}
 }

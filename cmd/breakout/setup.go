@@ -215,7 +215,7 @@ func respawnBricks(worlds app.Worlds, palette brickPalette) {
 			ecs.Set(worlds.Engine, engineEntity, local)
 			ecs.Set(worlds.Engine, engineEntity, transform.IdentityGlobalTransform())
 			ecs.Set(worlds.Engine, engineEntity, asset.RenderMesh{Mesh: palette.Cube})
-			ecs.Set(worlds.Engine, engineEntity, asset.Material{BaseColor: rowColor})
+			ecs.Set(worlds.Engine, engineEntity, asset.AlbedoMaterial(rowColor))
 
 			gameEntity := worlds.Game.Spawn(brickMask)
 			ecs.Set(worlds.Game, gameEntity, Brick{

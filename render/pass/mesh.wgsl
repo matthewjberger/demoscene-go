@@ -73,7 +73,7 @@ struct Material {
     roughness_factor: f32,
     alpha_cutoff:     f32,
     unlit:            u32,
-    _pad0:            u32,
+    ior:              f32,
 
     _pad1: vec4<f32>,
 };
@@ -414,7 +414,11 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     // exactly normalize(camera_position - world_pos).
     let v = view_dir;
     let n = normal;
-    let f0 = mix(vec3<f32>(0.04), albedo, metallic);
+    // F0 from the material's IOR (KHR_materials_ior). Default ior
+    // = 1.5 gives F0 ~= 0.04 which matches the spec fallback. The
+    // metallic blend keeps full-metal surfaces at albedo F0.
+    let dielectric_f0 = pow((mat.ior - 1.0) / (mat.ior + 1.0), 2.0);
+    let f0 = mix(vec3<f32>(dielectric_f0), albedo, metallic);
 
     var lo = vec3<f32>(0.0);
 
