@@ -148,9 +148,6 @@ func breakoutApp() *app.App {
 			if _, _, err := pass.AddSsaoPass(renderer, renderer.AspectRatio); err != nil {
 				log.Fatal(err)
 			}
-			if _, _, err := pass.AddSsgiPass(renderer, renderer.AspectRatio); err != nil {
-				log.Fatal(err)
-			}
 			if _, err := pass.AddAutoExposurePass(renderer); err != nil {
 				log.Fatal(err)
 			}

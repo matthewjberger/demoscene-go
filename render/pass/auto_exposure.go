@@ -122,7 +122,6 @@ func newAutoExposureState(device *wgpu.Device) (*autoExposurePassState, error) {
 	defer pipelineLayout.Release()
 
 	pipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
-		Label:  "auto_exposure pipeline",
 		Layout: pipelineLayout,
 		Compute: wgpu.ProgrammableStageDescriptor{
 			Module:     module,
