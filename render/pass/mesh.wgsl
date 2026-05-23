@@ -146,6 +146,37 @@ struct PointShadowUniforms {
 @group(1) @binding(14) var<uniform> point_shadow_uniforms: PointShadowUniforms;
 @group(1) @binding(15) var point_shadow_cube_array: texture_cube_array<f32>;
 @group(1) @binding(16) var point_shadow_sampler: sampler;
+@group(1) @binding(17) var shadow_raw_sampler: sampler;
+
+var<private> POISSON_16: array<vec2<f32>, 16> = array<vec2<f32>, 16>(
+    vec2<f32>(-0.94201624, -0.39906216),
+    vec2<f32>(0.94558609, -0.76890725),
+    vec2<f32>(-0.094184101, -0.92938870),
+    vec2<f32>(0.34495938, 0.29387760),
+    vec2<f32>(-0.91588581, 0.45771432),
+    vec2<f32>(-0.81544232, -0.87912464),
+    vec2<f32>(-0.38277543, 0.27676845),
+    vec2<f32>(0.97484398, 0.75648379),
+    vec2<f32>(0.44323325, -0.97511554),
+    vec2<f32>(0.53742981, -0.47373420),
+    vec2<f32>(-0.26496911, -0.41893023),
+    vec2<f32>(0.79197514, 0.19090188),
+    vec2<f32>(-0.24188840, 0.99706507),
+    vec2<f32>(-0.81409955, 0.91437590),
+    vec2<f32>(0.19984126, 0.78641367),
+    vec2<f32>(0.14383161, -0.14100790),
+);
+
+var<private> POISSON_8: array<vec2<f32>, 8> = array<vec2<f32>, 8>(
+    vec2<f32>(-0.7071, 0.7071),
+    vec2<f32>(0.0, -0.875),
+    vec2<f32>(0.5303, 0.5303),
+    vec2<f32>(-0.625, 0.0),
+    vec2<f32>(0.3536, -0.3536),
+    vec2<f32>(0.0, 0.875),
+    vec2<f32>(-0.5303, -0.5303),
+    vec2<f32>(0.625, 0.0),
+);
 
 @group(2) @binding(0) var<storage, read> models:           array<mat4x4<f32>>;
 @group(2) @binding(1) var<storage, read> material_indices: array<u32>;
@@ -312,6 +343,11 @@ fn select_cascade(view_depth: f32) -> i32 {
     return 3;
 }
 
+// sample_cascade does PCSS-style filtering on one cascade slice:
+// a small blocker search picks up the average occluder depth, that
+// drives a penumbra radius that scales by receiver-to-blocker
+// distance, and the final PCF samples a Poisson disk at that
+// radius. Falls back to a single compare when nothing occludes.
 fn sample_cascade(world_pos: vec3<f32>, world_normal: vec3<f32>, cascade: i32) -> f32 {
     let direction_to_light = -normalize(shadow_uniforms.light_direction.xyz);
     let texel_world = shadow_uniforms.cascade_texel_world[cascade];
@@ -329,14 +365,31 @@ fn sample_cascade(world_pos: vec3<f32>, world_normal: vec3<f32>, cascade: i32) -
     }
     let depth = shadow_ndc.z;
     let texel = 1.0 / 2048.0;
-    var sum: f32 = 0.0;
-    for (var dy: i32 = -1; dy <= 1; dy = dy + 1) {
-        for (var dx: i32 = -1; dx <= 1; dx = dx + 1) {
-            let offset = vec2<f32>(f32(dx) * texel, f32(dy) * texel);
-            sum = sum + textureSampleCompareLevel(shadow_map, shadow_sampler, shadow_uv + offset, cascade, depth);
+
+    let search_radius = 4.0 * texel;
+    var blocker_sum = 0.0;
+    var blocker_count = 0.0;
+    for (var index: i32 = 0; index < 8; index = index + 1) {
+        let offset = POISSON_8[index] * search_radius;
+        let sampled = textureSampleLevel(shadow_map, shadow_raw_sampler, shadow_uv + offset, cascade, 0.0);
+        if (sampled < depth) {
+            blocker_sum = blocker_sum + sampled;
+            blocker_count = blocker_count + 1.0;
         }
     }
-    return sum / 9.0;
+    if (blocker_count == 0.0) {
+        return 1.0;
+    }
+    let blocker_depth = blocker_sum / blocker_count;
+    let penumbra = (depth - blocker_depth) / max(blocker_depth, 0.0001);
+    let filter_radius = clamp(penumbra * 16.0 * texel, texel, 16.0 * texel);
+
+    var sum = 0.0;
+    for (var index: i32 = 0; index < 16; index = index + 1) {
+        let offset = POISSON_16[index] * filter_radius;
+        sum = sum + textureSampleCompareLevel(shadow_map, shadow_sampler, shadow_uv + offset, cascade, depth);
+    }
+    return sum / 16.0;
 }
 
 fn sample_directional_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>) -> f32 {
@@ -434,7 +487,32 @@ fn sample_spot_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_inde
     }
     let atlas_uv = entry.atlas_offset + slot_uv * entry.atlas_scale;
     let depth = shadow_ndc.z - entry.bias;
-    return textureSampleCompareLevel(spot_shadow_atlas, shadow_sampler, atlas_uv, depth);
+
+    let texel = 1.0 / 2048.0;
+    let search_radius = 4.0 * texel * entry.atlas_scale.x;
+    var blocker_sum = 0.0;
+    var blocker_count = 0.0;
+    for (var index: i32 = 0; index < 8; index = index + 1) {
+        let offset = POISSON_8[index] * search_radius;
+        let sampled = textureSampleLevel(spot_shadow_atlas, shadow_raw_sampler, atlas_uv + offset, 0.0);
+        if (sampled < depth) {
+            blocker_sum = blocker_sum + sampled;
+            blocker_count = blocker_count + 1.0;
+        }
+    }
+    if (blocker_count == 0.0) {
+        return 1.0;
+    }
+    let blocker_depth = blocker_sum / blocker_count;
+    let penumbra = (depth - blocker_depth) / max(blocker_depth, 0.0001);
+    let filter_radius = clamp(penumbra * 16.0 * texel, texel, 12.0 * texel) * entry.atlas_scale.x;
+
+    var sum = 0.0;
+    for (var index: i32 = 0; index < 16; index = index + 1) {
+        let offset = POISSON_16[index] * filter_radius;
+        sum = sum + textureSampleCompareLevel(spot_shadow_atlas, shadow_sampler, atlas_uv + offset, depth);
+    }
+    return sum / 16.0;
 }
 
 // sample_point_shadow looks up the omnidirectional shadow cube
@@ -458,11 +536,47 @@ fn sample_point_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_ind
     let slope = 1.0 - abs(dot(world_normal, light_dir));
     let bias = entry.bias * (1.0 + slope * 2.0);
     let reference = normalized - bias;
-    let sampled = textureSampleLevel(point_shadow_cube_array, point_shadow_sampler, direction, shadow_index, 0.0).r;
-    if (reference <= sampled) {
+
+    // Build a tangent frame around the sample direction so we can
+    // perturb the cube-sample direction with the same 2D Poisson
+    // disk used by the 2D shadow paths. The penumbra radius scales
+    // with distance from the light.
+    var up_axis = vec3<f32>(0.0, 1.0, 0.0);
+    if (abs(direction.y) > 0.95) {
+        up_axis = vec3<f32>(1.0, 0.0, 0.0);
+    }
+    let tangent = normalize(cross(up_axis, direction));
+    let bitangent = cross(direction, tangent);
+
+    let search_radius = 0.01;
+    var blocker_sum = 0.0;
+    var blocker_count = 0.0;
+    for (var index: i32 = 0; index < 8; index = index + 1) {
+        let disk = POISSON_8[index] * search_radius;
+        let sample_dir = normalize(direction + tangent * disk.x + bitangent * disk.y);
+        let sampled = textureSampleLevel(point_shadow_cube_array, point_shadow_sampler, sample_dir, shadow_index, 0.0).r;
+        if (sampled < reference) {
+            blocker_sum = blocker_sum + sampled;
+            blocker_count = blocker_count + 1.0;
+        }
+    }
+    if (blocker_count == 0.0) {
         return 1.0;
     }
-    return 0.0;
+    let blocker_depth = blocker_sum / blocker_count;
+    let penumbra = (reference - blocker_depth) / max(blocker_depth, 0.0001);
+    let filter_radius = clamp(penumbra * 0.05, 0.003, 0.04);
+
+    var visibility = 0.0;
+    for (var index: i32 = 0; index < 16; index = index + 1) {
+        let disk = POISSON_16[index] * filter_radius;
+        let sample_dir = normalize(direction + tangent * disk.x + bitangent * disk.y);
+        let sampled = textureSampleLevel(point_shadow_cube_array, point_shadow_sampler, sample_dir, shadow_index, 0.0).r;
+        if (reference <= sampled) {
+            visibility = visibility + 1.0;
+        }
+    }
+    return visibility / 16.0;
 }
 
 fn shade_one_light(light: Light, point_to_light: vec3<f32>, v: vec3<f32>, n: vec3<f32>, albedo: vec3<f32>, f0: vec3<f32>, metallic: f32, roughness: f32) -> vec3<f32> {

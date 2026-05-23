@@ -43,6 +43,7 @@ type Shadow struct {
 	ArrayView     *wgpu.TextureView
 	CascadeViews  [NumShadowCascades]*wgpu.TextureView
 	Sampler       *wgpu.Sampler
+	RawSampler    *wgpu.Sampler
 	CascadeVPs    [NumShadowCascades]*wgpu.Buffer
 	UniformBuffer *wgpu.Buffer
 	LightViewVPs  [NumShadowCascades]mgl32.Mat4
@@ -142,6 +143,21 @@ func NewShadow(device *wgpu.Device) (*Shadow, error) {
 		shadow.Release()
 		return nil, fmt.Errorf("shadow: sampler: %w", err)
 	}
+	rawSampler, err := device.CreateSampler(&wgpu.SamplerDescriptor{
+		Label:         "shadow raw sampler",
+		AddressModeU:  wgpu.AddressModeClampToEdge,
+		AddressModeV:  wgpu.AddressModeClampToEdge,
+		AddressModeW:  wgpu.AddressModeClampToEdge,
+		MagFilter:     wgpu.FilterModeNearest,
+		MinFilter:     wgpu.FilterModeNearest,
+		MipmapFilter:  wgpu.MipmapFilterModeNearest,
+		MaxAnisotropy: 1,
+	})
+	if err != nil {
+		shadow.Release()
+		return nil, fmt.Errorf("shadow: raw sampler: %w", err)
+	}
+	shadow.RawSampler = rawSampler
 	shadow.Sampler = sampler
 
 	for index := 0; index < NumShadowCascades; index++ {
@@ -187,6 +203,10 @@ func (s *Shadow) Release() {
 	if s.Sampler != nil {
 		s.Sampler.Release()
 		s.Sampler = nil
+	}
+	if s.RawSampler != nil {
+		s.RawSampler.Release()
+		s.RawSampler = nil
 	}
 	for index := range s.CascadeViews {
 		if s.CascadeViews[index] != nil {

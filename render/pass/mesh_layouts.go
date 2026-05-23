@@ -137,6 +137,11 @@ func createGlobalBgLayout(device *wgpu.Device) (*wgpu.BindGroupLayout, error) {
 				Visibility: wgpu.ShaderStageFragment,
 				Sampler:    wgpu.SamplerBindingLayout{Type: wgpu.SamplerBindingTypeNonFiltering},
 			},
+			{
+				Binding:    17,
+				Visibility: wgpu.ShaderStageFragment,
+				Sampler:    wgpu.SamplerBindingLayout{Type: wgpu.SamplerBindingTypeNonFiltering},
+			},
 		},
 	})
 	if err != nil {
@@ -390,6 +395,7 @@ func createGlobalBindGroup(
 			{Binding: 14, Buffer: pointShadow.DataBuffer, Offset: 0, Size: wgpu.WholeSize},
 			{Binding: 15, TextureView: pointShadow.CubeArrayView},
 			{Binding: 16, Sampler: pointShadow.Sampler},
+			{Binding: 17, Sampler: shadow.RawSampler},
 		},
 	})
 	if err != nil {
