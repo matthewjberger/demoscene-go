@@ -51,6 +51,8 @@ type Renderer struct {
 	EntityIdID      ResourceID
 	SelectionMaskID ResourceID
 	ViewNormalsID   ResourceID
+	OitAccumID      ResourceID
+	OitRevealID     ResourceID
 }
 
 // NewRenderer acquires an adapter and device from the instance, configures
@@ -102,6 +104,8 @@ func NewRenderer(instance *wgpu.Instance, surface *wgpu.Surface, width, height u
 	renderer.EntityIdID = renderer.Graph.ResourceByName("entity_id")
 	renderer.SelectionMaskID = renderer.Graph.ResourceByName("selection_mask")
 	renderer.ViewNormalsID = renderer.Graph.ResourceByName("view_normals")
+	renderer.OitAccumID = renderer.Graph.ResourceByName("oit_accum")
+	renderer.OitRevealID = renderer.Graph.ResourceByName("oit_reveal")
 
 	return renderer, nil
 }
@@ -189,6 +193,33 @@ func defaultGraph(surfaceFormat wgpu.TextureFormat, width, height uint32) *Graph
 			Usage:  wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding,
 		},
 		ClearColor: &clearViewNormals,
+	})
+	clearOitAccum := wgpu.Color{R: 0, G: 0, B: 0, A: 0}
+	graph.AddColorTexture(ResourceDescriptor{
+		Name: "oit_accum",
+		Kind: ResourceKindTransientColor,
+		Texture: TextureDescriptor{
+			Format: HdrFormat,
+			Width:  width,
+			Height: height,
+			Usage:  wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding,
+		},
+		ClearColor: &clearOitAccum,
+	})
+	// reveal clears to white because the reveal channel multiplies
+	// in 1 - alpha each fragment; a white background means
+	// "no transparent fragment has touched this pixel yet."
+	clearOitReveal := wgpu.Color{R: 1, G: 1, B: 1, A: 1}
+	graph.AddColorTexture(ResourceDescriptor{
+		Name: "oit_reveal",
+		Kind: ResourceKindTransientColor,
+		Texture: TextureDescriptor{
+			Format: wgpu.TextureFormatR8Unorm,
+			Width:  width,
+			Height: height,
+			Usage:  wgpu.TextureUsageRenderAttachment | wgpu.TextureUsageTextureBinding,
+		},
+		ClearColor: &clearOitReveal,
 	})
 	graph.AddColorTexture(ResourceDescriptor{
 		Name: "swapchain",

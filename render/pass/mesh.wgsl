@@ -383,7 +383,7 @@ fn sample_cascade(world_pos: vec3<f32>, world_normal: vec3<f32>, cascade: i32) -
     var blocker_count = 0.0;
     for (var index: i32 = 0; index < 8; index = index + 1) {
         let offset = POISSON_8[index] * search_radius;
-        let sampled = textureSampleLevel(shadow_map, shadow_raw_sampler, shadow_uv + offset, cascade, 0);
+        let sampled = textureSampleLevel(shadow_map, shadow_raw_sampler, shadow_uv + offset, cascade, 0.0);
         if (sampled < depth - search_bias) {
             blocker_sum = blocker_sum + sampled;
             blocker_count = blocker_count + 1.0;
@@ -511,7 +511,7 @@ fn sample_spot_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_inde
     var blocker_count = 0.0;
     for (var index: i32 = 0; index < 8; index = index + 1) {
         let offset = POISSON_8[index] * search_radius;
-        let sampled = textureSampleLevel(spot_shadow_atlas, shadow_raw_sampler, atlas_uv + offset, 0);
+        let sampled = textureSampleLevel(spot_shadow_atlas, shadow_raw_sampler, atlas_uv + offset, 0.0);
         if (sampled < depth - search_bias) {
             blocker_sum = blocker_sum + sampled;
             blocker_count = blocker_count + 1.0;
@@ -692,6 +692,14 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     let albedo = base_color.rgb;
 
     if (mat.alpha_mode == 1u && base_color.a < mat.alpha_cutoff) {
+        discard;
+    }
+    // Blend-mode (alpha_mode == 2u) materials route through the
+    // weighted-OIT pass instead of the opaque mesh path. Skipping
+    // them here keeps the opaque pass alpha-free and lets the OIT
+    // composite later layer them on top with proper depth-aware
+    // transparency.
+    if (mat.alpha_mode == 2u) {
         discard;
     }
 
