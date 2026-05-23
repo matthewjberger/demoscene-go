@@ -99,6 +99,10 @@ struct ShadowUniforms {
     cascade_splits: vec4<f32>,
     light_direction: vec4<f32>,
     cascade_texel_world: vec4<f32>,
+    light_size: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 };
 
 @group(1) @binding(9) var<uniform>       shadow_uniforms: ShadowUniforms;
@@ -111,7 +115,7 @@ struct SpotShadowEntry {
     atlas_scale: vec2<f32>,
     bias: f32,
     enabled: u32,
-    _pad0: f32,
+    light_size: f32,
     _pad1: f32,
 };
 
@@ -130,7 +134,7 @@ struct PointShadowEntry {
     position: vec3<f32>,
     range: f32,
     bias: f32,
-    _pad0: f32,
+    light_size: f32,
     _pad1: f32,
     _pad2: f32,
 };
@@ -344,14 +348,17 @@ fn select_cascade(view_depth: f32) -> i32 {
 }
 
 // sample_cascade does PCSS-style filtering on one cascade slice:
-// a small blocker search picks up the average occluder depth, that
-// drives a penumbra radius that scales by receiver-to-blocker
-// distance, and the final PCF samples a Poisson disk at that
-// radius. Falls back to a single compare when nothing occludes.
+// blocker search using a non-comparison depth read drives the
+// penumbra radius, the final PCF samples a Poisson disk at that
+// radius. light_size scales the penumbra so different lights can
+// have different softness.
 fn sample_cascade(world_pos: vec3<f32>, world_normal: vec3<f32>, cascade: i32) -> f32 {
     let direction_to_light = -normalize(shadow_uniforms.light_direction.xyz);
     let texel_world = shadow_uniforms.cascade_texel_world[cascade];
-    let normal_offset = world_normal * texel_world * 1.8;
+    // Slope-aware normal bias: surfaces near grazing angles need
+    // more offset to avoid acne without peter-panning flat ones.
+    let slope = 1.0 - max(dot(world_normal, direction_to_light), 0.0);
+    let normal_offset = world_normal * texel_world * (1.8 + slope * 3.0);
     let depth_offset = direction_to_light * 0.008;
     let offset_pos = world_pos + normal_offset + depth_offset;
     let shadow_clip = shadow_uniforms.cascade_view_projections[cascade] * vec4<f32>(offset_pos, 1.0);
@@ -365,14 +372,19 @@ fn sample_cascade(world_pos: vec3<f32>, world_normal: vec3<f32>, cascade: i32) -
     }
     let depth = shadow_ndc.z;
     let texel = 1.0 / 2048.0;
+    let light_size = max(shadow_uniforms.light_size, 0.001);
 
-    let search_radius = 4.0 * texel;
+    // Bias subtracted from the receiver depth during the blocker
+    // search so a self-shadow acne pixel doesn't get picked up as
+    // its own blocker and inflate the penumbra.
+    let search_bias = 0.001;
+    let search_radius = 4.0 * texel * light_size;
     var blocker_sum = 0.0;
     var blocker_count = 0.0;
     for (var index: i32 = 0; index < 8; index = index + 1) {
         let offset = POISSON_8[index] * search_radius;
         let sampled = textureSampleLevel(shadow_map, shadow_raw_sampler, shadow_uv + offset, cascade, 0.0);
-        if (sampled < depth) {
+        if (sampled < depth - search_bias) {
             blocker_sum = blocker_sum + sampled;
             blocker_count = blocker_count + 1.0;
         }
@@ -382,7 +394,7 @@ fn sample_cascade(world_pos: vec3<f32>, world_normal: vec3<f32>, cascade: i32) -
     }
     let blocker_depth = blocker_sum / blocker_count;
     let penumbra = (depth - blocker_depth) / max(blocker_depth, 0.0001);
-    let filter_radius = clamp(penumbra * 16.0 * texel, texel, 16.0 * texel);
+    let filter_radius = clamp(penumbra * 16.0 * texel * light_size, texel, 24.0 * texel);
 
     var sum = 0.0;
     for (var index: i32 = 0; index < 16; index = index + 1) {
@@ -399,7 +411,10 @@ fn sample_directional_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>) -> f
     let factor = sample_cascade(world_pos, world_normal, cascade);
     if (cascade < 3) {
         let cascade_end = shadow_uniforms.cascade_splits[cascade];
-        let blend_range = cascade_end * 0.15;
+        // Wider blend than the old PCF needed because PCSS
+        // produces softer penumbras that make the cascade seam
+        // visible if we transition too sharply.
+        let blend_range = cascade_end * 0.25;
         let blend_start = cascade_end - blend_range;
         if (view_depth > blend_start) {
             let next = sample_cascade(world_pos, world_normal, cascade + 1);
@@ -489,13 +504,15 @@ fn sample_spot_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_inde
     let depth = shadow_ndc.z - entry.bias;
 
     let texel = 1.0 / 2048.0;
-    let search_radius = 4.0 * texel * entry.atlas_scale.x;
+    let light_size = max(entry.light_size, 0.001);
+    let search_bias = 0.001;
+    let search_radius = 4.0 * texel * entry.atlas_scale.x * light_size;
     var blocker_sum = 0.0;
     var blocker_count = 0.0;
     for (var index: i32 = 0; index < 8; index = index + 1) {
         let offset = POISSON_8[index] * search_radius;
         let sampled = textureSampleLevel(spot_shadow_atlas, shadow_raw_sampler, atlas_uv + offset, 0.0);
-        if (sampled < depth) {
+        if (sampled < depth - search_bias) {
             blocker_sum = blocker_sum + sampled;
             blocker_count = blocker_count + 1.0;
         }
@@ -505,7 +522,7 @@ fn sample_spot_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_inde
     }
     let blocker_depth = blocker_sum / blocker_count;
     let penumbra = (depth - blocker_depth) / max(blocker_depth, 0.0001);
-    let filter_radius = clamp(penumbra * 16.0 * texel, texel, 12.0 * texel) * entry.atlas_scale.x;
+    let filter_radius = clamp(penumbra * 16.0 * texel * light_size, texel, 16.0 * texel) * entry.atlas_scale.x;
 
     var sum = 0.0;
     for (var index: i32 = 0; index < 16; index = index + 1) {
@@ -537,25 +554,32 @@ fn sample_point_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_ind
     let bias = entry.bias * (1.0 + slope * 2.0);
     let reference = normalized - bias;
 
-    // Build a tangent frame around the sample direction so we can
-    // perturb the cube-sample direction with the same 2D Poisson
-    // disk used by the 2D shadow paths. The penumbra radius scales
-    // with distance from the light.
-    var up_axis = vec3<f32>(0.0, 1.0, 0.0);
-    if (abs(direction.y) > 0.95) {
-        up_axis = vec3<f32>(1.0, 0.0, 0.0);
+    // Build a tangent frame around the sample direction using the
+    // Frisvad branchless orthonormal basis. Smooth across the
+    // direction.y singularity that the older abs(direction.y)>0.95
+    // branch produced visible flicker around during camera motion.
+    var tangent: vec3<f32>;
+    var bitangent: vec3<f32>;
+    if (direction.z < -0.9999999) {
+        tangent = vec3<f32>(0.0, -1.0, 0.0);
+        bitangent = vec3<f32>(-1.0, 0.0, 0.0);
+    } else {
+        let a = 1.0 / (1.0 + direction.z);
+        let b = -direction.x * direction.y * a;
+        tangent = vec3<f32>(1.0 - direction.x * direction.x * a, b, -direction.x);
+        bitangent = vec3<f32>(b, 1.0 - direction.y * direction.y * a, -direction.y);
     }
-    let tangent = normalize(cross(up_axis, direction));
-    let bitangent = cross(direction, tangent);
 
-    let search_radius = 0.01;
+    let light_size = max(entry.light_size, 0.001);
+    let search_bias = 0.002;
+    let search_radius = 0.01 * light_size;
     var blocker_sum = 0.0;
     var blocker_count = 0.0;
     for (var index: i32 = 0; index < 8; index = index + 1) {
         let disk = POISSON_8[index] * search_radius;
         let sample_dir = normalize(direction + tangent * disk.x + bitangent * disk.y);
         let sampled = textureSampleLevel(point_shadow_cube_array, point_shadow_sampler, sample_dir, shadow_index, 0.0).r;
-        if (sampled < reference) {
+        if (sampled < reference - search_bias) {
             blocker_sum = blocker_sum + sampled;
             blocker_count = blocker_count + 1.0;
         }
@@ -565,7 +589,7 @@ fn sample_point_shadow(world_pos: vec3<f32>, world_normal: vec3<f32>, shadow_ind
     }
     let blocker_depth = blocker_sum / blocker_count;
     let penumbra = (reference - blocker_depth) / max(blocker_depth, 0.0001);
-    let filter_radius = clamp(penumbra * 0.05, 0.003, 0.04);
+    let filter_radius = clamp(penumbra * 0.05 * light_size, 0.003, 0.06);
 
     var visibility = 0.0;
     for (var index: i32 = 0; index < 16; index = index + 1) {

@@ -63,6 +63,10 @@ type shadowMeshUniform struct {
 	CascadeSplits        mgl32.Vec4
 	LightDirection       mgl32.Vec4
 	CascadeTexelWorld    mgl32.Vec4
+	LightSize            float32
+	Pad0                 float32
+	Pad1                 float32
+	Pad2                 float32
 }
 
 type shadowDepthPassState struct {
@@ -355,11 +359,15 @@ func shadowDepthPrepare(s any, context *render.PassContext) error {
 	_ = s
 
 	lightDir := mgl32.Vec3{-0.3, -1.0, -0.4}.Normalize()
+	lightSize := float32(1.0)
 	lightMask := ecs.MustMaskOf[render.Light](context.World)
 	context.World.ForEach(lightMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
 		light, ok := ecs.Get[render.Light](context.World, entity)
 		if !ok || light.Type != render.LightTypeDirectional {
 			return
+		}
+		if light.LightSize > 0 {
+			lightSize = light.LightSize
 		}
 		if global, ok := ecs.Get[transform.GlobalTransform](context.World, entity); ok {
 			forward := mgl32.Vec3{-global.Matrix[8], -global.Matrix[9], -global.Matrix[10]}
@@ -403,6 +411,7 @@ func shadowDepthPrepare(s any, context *render.PassContext) error {
 	}
 	meshUniform.CascadeSplits = mgl32.Vec4{splits[0], splits[1], splits[2], splits[3]}
 	meshUniform.LightDirection = mgl32.Vec4{lightDir.X(), lightDir.Y(), lightDir.Z(), 0}
+	meshUniform.LightSize = lightSize
 	writeBuffer(context.Device, context.Queue, context.Encoder, shadow.UniformBuffer, 0, bytesOf(&meshUniform))
 	return nil
 }

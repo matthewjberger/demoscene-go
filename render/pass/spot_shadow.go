@@ -67,7 +67,7 @@ type spotShadowEntry struct {
 	AtlasScale  mgl32.Vec2
 	Bias        float32
 	Active      uint32
-	Pad0        float32
+	LightSize   float32
 	Pad1        float32
 }
 
@@ -383,12 +383,17 @@ func spotShadowPrepare(s any, context *render.PassContext) error {
 		slotUniform := spotShadowSlotUniform{LightViewProj: slotViewProj}
 		writeBuffer(context.Device, context.Queue, context.Encoder, shadow.SlotBuffers[index], 0, bytesOf(&slotUniform))
 
+		lightSize := light.LightSize
+		if lightSize <= 0 {
+			lightSize = 1.0
+		}
 		meshUniform.Entries[index] = spotShadowEntry{
 			ViewProj:    viewProj,
 			AtlasOffset: mgl32.Vec2{atlasOffX, atlasOffY},
 			AtlasScale:  mgl32.Vec2{atlasScale, atlasScale},
 			Bias:        light.ShadowBias,
 			Active:      1,
+			LightSize:   lightSize,
 		}
 		shadow.SlotEntities[index] = candidate.Entity
 	}

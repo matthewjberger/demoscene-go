@@ -64,6 +64,7 @@ func initializeWorldEntities(worlds app.Worlds, meshes []asset.MeshHandle, meshN
 	spawnLightOrbs(worlds, orbMesh)
 	spawnGroundPlane(worlds)
 	spawnDemoCamera(worlds)
+	spawnSkinnedDemo(worlds)
 
 	engineMask := ecs.MustMaskOf[transform.LocalTransform](worlds.Engine) |
 		ecs.MustMaskOf[transform.GlobalTransform](worlds.Engine) |

@@ -30,6 +30,10 @@ type Light struct {
 	OuterConeAngle float32
 	CastShadows    bool
 	ShadowBias     float32
+	// LightSize drives the PCSS penumbra width. Larger values
+	// produce softer (wider) penumbras far from the caster; 0
+	// falls back to a default of 1.0 per the shader.
+	LightSize float32
 }
 
 // MaxLights is the fixed-size cap on lights uploaded to the mesh

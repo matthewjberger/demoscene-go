@@ -66,6 +66,7 @@ func buildWorlds(renderer *render.Renderer) (app.Worlds, *app.App) {
 	worlds.EngineSchedule.Push("pan_orbit_camera", render.UpdatePanOrbitCamera)
 	worlds.EngineSchedule.Push("animations", asset.UpdateAnimationPlayers)
 	worlds.EngineSchedule.Push("transform_propagation", transform.UpdateGlobalTransforms)
+	worlds.EngineSchedule.Push("skin_matrices", pass.PrepareSkinMatrices)
 	worlds.EngineSchedule.Push("bounding_volume_lines", pass.UpdateBoundingVolumeLines)
 	worlds.EngineSchedule.Push("normal_lines", pass.UpdateNormalLines)
 	_ = advanceSpinners
@@ -113,6 +114,9 @@ func editorApp() *app.App {
 				log.Fatal(err)
 			}
 			if _, err := pass.AddPointShadowPass(renderer, pointShadow); err != nil {
+				log.Fatal(err)
+			}
+			if _, err := pass.AddSkinnedMeshPass(renderer); err != nil {
 				log.Fatal(err)
 			}
 			if _, err := pass.AddMeshPass(renderer, arrays, registry, ibl, shadow, spotShadow, pointShadow); err != nil {

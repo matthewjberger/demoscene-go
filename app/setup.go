@@ -36,6 +36,7 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	ecs.Register[transform.IgnoreParentScale](engine)
 	ecs.Register[transform.GroupRoot](engine)
 	ecs.Register[asset.RenderMesh](engine)
+	ecs.Register[asset.SkinnedMesh](engine)
 	ecs.Register[asset.Material](engine)
 	ecs.Register[asset.AnimationPlayer](engine)
 	ecs.Register[render.Light](engine)
@@ -44,6 +45,7 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	ecs.Register[Name](engine)
 
 	meshAssets := asset.NewMeshAssets()
+	skinnedMeshAssets := asset.NewSkinnedMeshAssets()
 	primitives, err := asset.RegisterPrimitives(renderer.Device, meshAssets)
 	if err != nil {
 		return nil, fmt.Errorf("app: register primitives: %w", err)
@@ -94,6 +96,7 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	})
 	ecs.SetResource(engine, render.RendererResource{Renderer: renderer})
 	ecs.SetResource(engine, asset.MeshAssetsResource{Assets: meshAssets})
+	ecs.SetResource(engine, asset.SkinnedMeshAssetsResource{Assets: skinnedMeshAssets})
 	ecs.SetResource(engine, asset.TextureCacheResource{Cache: textureCache})
 	ecs.SetResource(engine, asset.MaterialTextureArraysResource{Arrays: materialArrays})
 	ecs.SetResource(engine, asset.MaterialRegistryResource{Registry: materialRegistry})

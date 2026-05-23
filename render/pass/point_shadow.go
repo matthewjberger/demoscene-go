@@ -83,12 +83,12 @@ type pointShadowFaceUniform struct {
 }
 
 type pointShadowEntry struct {
-	Position mgl32.Vec3
-	Range    float32
-	Bias     float32
-	Pad0     float32
-	Pad1     float32
-	Pad2     float32
+	Position  mgl32.Vec3
+	Range     float32
+	Bias      float32
+	LightSize float32
+	Pad1      float32
+	Pad2      float32
 }
 
 type pointShadowMeshUniform struct {
@@ -453,10 +453,15 @@ func pointShadowPrepare(s any, context *render.PassContext) error {
 			writeBuffer(context.Device, context.Queue, context.Encoder, shadow.FaceUniform, offset, bytesOf(&uniform))
 		}
 
+		lightSize := light.LightSize
+		if lightSize <= 0 {
+			lightSize = 1.0
+		}
 		meshUniform.Entries[index] = pointShadowEntry{
-			Position: position,
-			Range:    rangeValue,
-			Bias:     light.ShadowBias,
+			Position:  position,
+			Range:     rangeValue,
+			Bias:      light.ShadowBias,
+			LightSize: lightSize,
 		}
 		shadow.SlotEntities[index] = candidate.Entity
 	}
