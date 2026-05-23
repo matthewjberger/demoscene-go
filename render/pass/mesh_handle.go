@@ -26,15 +26,16 @@ import (
 // instance_count from a future GPU-culling compute pass becomes a
 // one-line swap.
 type handleInstances struct {
-	modelBuffer            *wgpu.Buffer
-	materialIndexBuffer    *wgpu.Buffer
-	entityIdBuffer         *wgpu.Buffer
-	indirectBuffer         *wgpu.Buffer
-	buildIndirectParams    *wgpu.Buffer
-	buildIndirectBindGroup *wgpu.BindGroup
-	bindGroup              *wgpu.BindGroup
-	shadowBindGroup        *wgpu.BindGroup
-	capacity               uint32
+	modelBuffer          *wgpu.Buffer
+	materialIndexBuffer  *wgpu.Buffer
+	entityIdBuffer       *wgpu.Buffer
+	visibleIndicesBuffer *wgpu.Buffer
+	indirectBuffer       *wgpu.Buffer
+	cullParamsBuffer     *wgpu.Buffer
+	cullBindGroup        *wgpu.BindGroup
+	bindGroup            *wgpu.BindGroup
+	shadowBindGroup      *wgpu.BindGroup
+	capacity             uint32
 
 	entityToSlot map[ecs.Entity]uint32
 	slotEntity   []ecs.Entity
@@ -61,13 +62,17 @@ func releaseHandleInstances(h *handleInstances) {
 		h.indirectBuffer.Release()
 		h.indirectBuffer = nil
 	}
-	if h.buildIndirectBindGroup != nil {
-		h.buildIndirectBindGroup.Release()
-		h.buildIndirectBindGroup = nil
+	if h.visibleIndicesBuffer != nil {
+		h.visibleIndicesBuffer.Release()
+		h.visibleIndicesBuffer = nil
 	}
-	if h.buildIndirectParams != nil {
-		h.buildIndirectParams.Release()
-		h.buildIndirectParams = nil
+	if h.cullBindGroup != nil {
+		h.cullBindGroup.Release()
+		h.cullBindGroup = nil
+	}
+	if h.cullParamsBuffer != nil {
+		h.cullParamsBuffer.Release()
+		h.cullParamsBuffer = nil
 	}
 	if h.shadowBindGroup != nil {
 		h.shadowBindGroup.Release()
@@ -103,7 +108,7 @@ const minHandleCapacity uint32 = 64
 // reuploaded next time their components stamp.
 func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.BindGroupLayout) error {
 	required := uint32(len(h.slotEntity))
-	if h.capacity >= required && h.modelBuffer != nil && h.materialIndexBuffer != nil && h.entityIdBuffer != nil {
+	if h.capacity >= required && h.modelBuffer != nil && h.materialIndexBuffer != nil && h.entityIdBuffer != nil && h.visibleIndicesBuffer != nil {
 		return nil
 	}
 	newCapacity := h.capacity
@@ -144,6 +149,17 @@ func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.
 		materialIndexBuffer.Release()
 		return fmt.Errorf("mesh pass: entity_id buffer: %w", err)
 	}
+	visibleIndicesBuffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
+		Label: "mesh visible_indices buffer",
+		Size:  uint64(newCapacity) * 4,
+		Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
+	})
+	if err != nil {
+		modelBuffer.Release()
+		materialIndexBuffer.Release()
+		entityIdBuffer.Release()
+		return fmt.Errorf("mesh pass: visible_indices buffer: %w", err)
+	}
 	bindGroup, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
 		Label:  "mesh per-handle bind group",
 		Layout: layout,
@@ -151,12 +167,14 @@ func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.
 			{Binding: 0, Buffer: modelBuffer, Offset: 0, Size: wgpu.WholeSize},
 			{Binding: 1, Buffer: materialIndexBuffer, Offset: 0, Size: wgpu.WholeSize},
 			{Binding: 2, Buffer: entityIdBuffer, Offset: 0, Size: wgpu.WholeSize},
+			{Binding: 3, Buffer: visibleIndicesBuffer, Offset: 0, Size: wgpu.WholeSize},
 		},
 	})
 	if err != nil {
 		modelBuffer.Release()
 		materialIndexBuffer.Release()
 		entityIdBuffer.Release()
+		visibleIndicesBuffer.Release()
 		return fmt.Errorf("mesh pass: per-handle bind group: %w", err)
 	}
 	if h.bindGroup != nil {
@@ -171,13 +189,21 @@ func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.
 	if h.entityIdBuffer != nil {
 		h.entityIdBuffer.Release()
 	}
+	if h.visibleIndicesBuffer != nil {
+		h.visibleIndicesBuffer.Release()
+	}
 	if h.shadowBindGroup != nil {
 		h.shadowBindGroup.Release()
 		h.shadowBindGroup = nil
 	}
+	if h.cullBindGroup != nil {
+		h.cullBindGroup.Release()
+		h.cullBindGroup = nil
+	}
 	h.modelBuffer = modelBuffer
 	h.materialIndexBuffer = materialIndexBuffer
 	h.entityIdBuffer = entityIdBuffer
+	h.visibleIndicesBuffer = visibleIndicesBuffer
 	h.bindGroup = bindGroup
 	h.capacity = newCapacity
 

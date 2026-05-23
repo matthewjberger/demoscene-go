@@ -49,8 +49,8 @@ type meshPassState struct {
 	globalBindGroup *wgpu.BindGroup
 	iblBindGroup    *wgpu.BindGroup
 
-	clusters      *clusterResources
-	buildIndirect *buildIndirectPipeline
+	clusters    *clusterResources
+	meshCulling *meshCullingPipeline
 
 	perHandle     map[asset.MeshHandle]*handleInstances
 	entityHandle  map[ecs.Entity]asset.MeshHandle
@@ -62,6 +62,7 @@ type meshPassState struct {
 	// reallocating the per-frame ClusterUniforms upload value.
 	clusterUniformsScratch ClusterUniforms
 	lightScratch           []LightGPU
+	identityScratch        []uint32
 }
 
 // NewMeshPass builds the engine's instanced PBR mesh pass.
@@ -145,11 +146,11 @@ func NewMeshPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect f
 	}
 	state.pipeline = pipeline
 
-	buildIndirect, err := newBuildIndirectPipeline(device)
+	culling, err := newMeshCullingPipeline(device)
 	if err != nil {
 		return nil, err
 	}
-	state.buildIndirect = buildIndirect
+	state.meshCulling = culling
 
 	sharedMeshPassState.Store(state)
 

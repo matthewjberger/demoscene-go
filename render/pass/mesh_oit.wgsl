@@ -48,6 +48,7 @@ struct Material {
 @group(1) @binding(0) var<storage, read> models:           array<mat4x4<f32>>;
 @group(1) @binding(1) var<storage, read> material_indices: array<u32>;
 @group(1) @binding(2) var<storage, read> entity_ids:       array<u32>;
+@group(1) @binding(3) var<storage, read> visible_indices:  array<u32>;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -78,7 +79,8 @@ const NO_TEXTURE_LAYER: u32 = 0xFFFFFFFFu;
 
 @vertex
 fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32) -> VertexOutput {
-    let model = models[instance_index];
+    let slot = visible_indices[instance_index];
+    let model = models[slot];
     let world_position = model * vec4<f32>(input.position.xyz, 1.0);
     let world_normal = normalize((model * vec4<f32>(input.normal.xyz, 0.0)).xyz);
     let clip = view_proj_uniform.view_proj * world_position;
@@ -88,8 +90,8 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32)
     out.world_normal = world_normal;
     out.uv = input.uv.xy;
     out.color = input.color;
-    out.material_index = material_indices[instance_index];
-    out.entity_id = entity_ids[instance_index];
+    out.material_index = material_indices[slot];
+    out.entity_id = entity_ids[slot];
     // The cascade-uniform here drives the depth-aware weight in
     // fs_main. Linear positive depth (camera-forward distance).
     out.view_z = max(clip.w, 0.0001);

@@ -175,6 +175,11 @@ func createHandleBgLayout(device *wgpu.Device) (*wgpu.BindGroupLayout, error) {
 				Visibility: wgpu.ShaderStageVertex,
 				Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage},
 			},
+			{
+				Binding:    3,
+				Visibility: wgpu.ShaderStageVertex,
+				Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage},
+			},
 		},
 	})
 	if err != nil {

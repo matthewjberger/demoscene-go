@@ -7,11 +7,13 @@ import (
 	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
+	"github.com/go-gl/mathgl/mgl32"
 
 	"indigo/ecs"
 	"indigo/render"
 	"indigo/render/asset"
 	"indigo/transform"
+	"indigo/window"
 )
 
 // meshPrepare runs every frame:
@@ -146,74 +148,167 @@ func meshPrepare(s any, context *render.PassContext) error {
 	})
 
 	assets := ecs.MustResource[asset.MeshAssetsResource](context.World).Assets
+	camera, hasCamera := ecs.Resource[render.Camera](context.World)
+	aspect = state.aspectFn()
+	var viewProj mgl32.Mat4
+	if hasCamera && camera != nil {
+		viewProj = render.CameraViewProjection(camera, aspect)
+	} else {
+		viewProj = mgl32.Ident4()
+	}
+	screenW, screenH := float32(1920), float32(1080)
+	if win, ok := ecs.Resource[window.Window](context.World); ok && win != nil {
+		if win.Viewport.Width > 0 {
+			screenW = float32(win.Viewport.Width)
+		}
+		if win.Viewport.Height > 0 {
+			screenH = float32(win.Viewport.Height)
+		}
+	}
+	cullSettings := DefaultCullSettings()
+	if cfg, ok := ecs.Resource[CullSettings](context.World); ok && cfg != nil {
+		cullSettings = *cfg
+	}
+	enabled := uint32(0)
+	if cullSettings.Enabled {
+		enabled = 1
+	}
+	fovY := float32(1.0)
+	if hasCamera && camera != nil {
+		fovY = camera.FovYRadians
+	}
+	projScaleY := 1.0 / float32(math.Tan(float64(fovY)*0.5))
+	cullUniform := CullingUniforms{
+		FrustumPlanes:      ExtractFrustumPlanes(viewProj),
+		ViewProjection:     viewProj,
+		ScreenSize:         mgl32.Vec2{screenW, screenH},
+		MinScreenPixelSize: cullSettings.MinScreenPixelSize,
+		ProjectionScaleY:   projScaleY,
+		Enabled:            enabled,
+	}
+	writeBuffer(context.Device, context.Queue, context.Encoder, state.meshCulling.frameBuffer, 0, bytesOf(&cullUniform))
+
 	for _, handle := range state.sortedHandles {
 		bucket := state.perHandle[handle]
 		entry, ok := assets.Lookup(handle)
 		if !ok {
 			continue
 		}
-		if err := ensureBuildIndirectBindings(bucket, context.Device, state.buildIndirect); err != nil {
+		if err := ensureCullBindings(bucket, context.Device, state.meshCulling); err != nil {
 			return err
 		}
-		params := buildIndirectParams{
+		bcenter := entry.Bounds.Center()
+		bradius := entry.Bounds.Radius()
+		params := bucketCullParams{
+			BoundsCenter:  mgl32.Vec3{bcenter[0], bcenter[1], bcenter[2]},
+			BoundsRadius:  bradius,
+			ObjectCount:   uint32(len(bucket.slotEntity)),
 			VertexCount:   entry.VertexCount,
-			InstanceCount: uint32(len(bucket.slotEntity)),
+			FirstVertex:   0,
+			FirstInstance: 0,
 		}
-		writeBuffer(context.Device, context.Queue, context.Encoder, bucket.buildIndirectParams, 0, bytesOf(&params))
+		writeBuffer(context.Device, context.Queue, context.Encoder, bucket.cullParamsBuffer, 0, bytesOf(&params))
+		// Always-identity visible_indices so the wasm draw path
+		// (which doesn't support DrawIndirect and draws every
+		// slot) reads valid indices. The cull compute overwrites
+		// the leading K entries with culled indices on native.
+		count := uint32(len(bucket.slotEntity))
+		if count > 0 {
+			identity := state.identityScratch[:0]
+			for index := uint32(0); index < count; index = index + 1 {
+				identity = append(identity, index)
+			}
+			state.identityScratch = identity
+			writeBuffer(context.Device, context.Queue, context.Encoder, bucket.visibleIndicesBuffer, 0, bytesOfN(&identity[0], uint64(count)*4))
+		}
 	}
 
 	if len(state.sortedHandles) > 0 {
-		computePass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
-		computePass.SetPipeline(state.buildIndirect.pipeline)
+		resetPass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
+		resetPass.SetBindGroup(0, state.meshCulling.frameBindGroup, nil)
+		resetPass.SetPipeline(state.meshCulling.resetPipeline)
 		for _, handle := range state.sortedHandles {
 			bucket := state.perHandle[handle]
-			if bucket.buildIndirectBindGroup == nil {
+			if bucket.cullBindGroup == nil {
 				continue
 			}
-			computePass.SetBindGroup(0, bucket.buildIndirectBindGroup, nil)
-			computePass.DispatchWorkgroups(1, 1, 1)
+			resetPass.SetBindGroup(1, bucket.cullBindGroup, nil)
+			resetPass.DispatchWorkgroups(1, 1, 1)
 		}
-		computePass.End()
-		computePass.Release()
+		resetPass.End()
+		resetPass.Release()
+
+		cullPass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
+		cullPass.SetBindGroup(0, state.meshCulling.frameBindGroup, nil)
+		cullPass.SetPipeline(state.meshCulling.cullPipeline)
+		for _, handle := range state.sortedHandles {
+			bucket := state.perHandle[handle]
+			if bucket.cullBindGroup == nil {
+				continue
+			}
+			count := uint32(len(bucket.slotEntity))
+			groups := (count + 63) / 64
+			if groups == 0 {
+				continue
+			}
+			cullPass.SetBindGroup(1, bucket.cullBindGroup, nil)
+			cullPass.DispatchWorkgroups(groups, 1, 1)
+		}
+		cullPass.End()
+		cullPass.Release()
 	}
 
 	return nil
 }
 
-// ensureBuildIndirectBindings lazily creates the per-handle uniform
-// + bind group that drive the build_indirect compute. Both depend
-// on bucket.indirectBuffer, so they're built after the first
-// ensureHandleCapacity call and re-built if the indirect buffer
-// changes (which it doesn't today, but the check is here for
-// future growth).
-func ensureBuildIndirectBindings(bucket *handleInstances, device *wgpu.Device, builder *buildIndirectPipeline) error {
-	if bucket.indirectBuffer == nil || builder == nil {
+// CullSettings is the editor-tunable cull resource. Disabled
+// returns every instance from the cull compute; the frustum and
+// min-pixel tests no-op.
+type CullSettings struct {
+	Enabled            bool
+	MinScreenPixelSize float32
+}
+
+// DefaultCullSettings enables culling with a 1-pixel cutoff.
+func DefaultCullSettings() CullSettings {
+	return CullSettings{Enabled: true, MinScreenPixelSize: 1.0}
+}
+
+// ensureCullBindings lazily creates the per-bucket uniform +
+// bind group that drive the per-bucket cull compute. The uniform
+// holds the mesh's bounding sphere and the indirect-command
+// template; the bind group also references the model storage
+// buffer, indirect command buffer, and visible_indices buffer.
+func ensureCullBindings(bucket *handleInstances, device *wgpu.Device, culling *meshCullingPipeline) error {
+	if bucket.indirectBuffer == nil || culling == nil {
 		return nil
 	}
-	if bucket.buildIndirectParams == nil {
-		params, err := device.CreateBuffer(&wgpu.BufferDescriptor{
-			Label: "mesh build_indirect params",
-			Size:  buildIndirectParamsSize,
+	if bucket.cullParamsBuffer == nil {
+		buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
+			Label: "mesh cull params",
+			Size:  uint64(unsafe.Sizeof(bucketCullParams{})),
 			Usage: wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
 		})
 		if err != nil {
-			return fmt.Errorf("mesh pass: build_indirect params: %w", err)
+			return fmt.Errorf("mesh pass: cull params: %w", err)
 		}
-		bucket.buildIndirectParams = params
+		bucket.cullParamsBuffer = buf
 	}
-	if bucket.buildIndirectBindGroup == nil {
+	if bucket.cullBindGroup == nil {
 		bg, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
-			Label:  "mesh build_indirect bind group",
-			Layout: builder.bindGroupLayout,
+			Label:  "mesh cull bind group",
+			Layout: culling.bucketLayout,
 			Entries: []wgpu.BindGroupEntry{
-				{Binding: 0, Buffer: bucket.buildIndirectParams, Offset: 0, Size: buildIndirectParamsSize},
-				{Binding: 1, Buffer: bucket.indirectBuffer, Offset: 0, Size: drawIndirectCommandSize},
+				{Binding: 0, Buffer: bucket.cullParamsBuffer, Offset: 0, Size: uint64(unsafe.Sizeof(bucketCullParams{}))},
+				{Binding: 1, Buffer: bucket.modelBuffer, Offset: 0, Size: wgpu.WholeSize},
+				{Binding: 2, Buffer: bucket.indirectBuffer, Offset: 0, Size: drawIndirectCommandSize},
+				{Binding: 3, Buffer: bucket.visibleIndicesBuffer, Offset: 0, Size: wgpu.WholeSize},
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("mesh pass: build_indirect bind group: %w", err)
+			return fmt.Errorf("mesh pass: cull bind group: %w", err)
 		}
-		bucket.buildIndirectBindGroup = bg
+		bucket.cullBindGroup = bg
 	}
 	return nil
 }
@@ -295,8 +390,8 @@ func meshRelease(s any) {
 	if state.clusters != nil {
 		state.clusters.release()
 	}
-	if state.buildIndirect != nil {
-		state.buildIndirect.release()
+	if state.meshCulling != nil {
+		state.meshCulling.release()
 	}
 	sharedMeshPassState.Store((*meshPassState)(nil))
 	if state.viewProjBindGroup != nil {

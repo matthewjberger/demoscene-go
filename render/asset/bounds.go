@@ -37,6 +37,23 @@ func ComputeBounds(vertices []MeshVertex) BoundingVolume {
 	return BoundingVolume{Min: min, Max: max}
 }
 
+// Center returns the AABB midpoint.
+func (b BoundingVolume) Center() [3]float32 {
+	return [3]float32{
+		(b.Min[0] + b.Max[0]) * 0.5,
+		(b.Min[1] + b.Max[1]) * 0.5,
+		(b.Min[2] + b.Max[2]) * 0.5,
+	}
+}
+
+// Radius returns the sphere radius bounding the AABB.
+func (b BoundingVolume) Radius() float32 {
+	dx := (b.Max[0] - b.Min[0]) * 0.5
+	dy := (b.Max[1] - b.Min[1]) * 0.5
+	dz := (b.Max[2] - b.Min[2]) * 0.5
+	return float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+}
+
 // Corners returns the eight corner points of the AABB.
 func (b BoundingVolume) Corners() [8][3]float32 {
 	return [8][3]float32{

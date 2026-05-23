@@ -185,6 +185,7 @@ var<private> POISSON_8: array<vec2<f32>, 8> = array<vec2<f32>, 8>(
 @group(2) @binding(0) var<storage, read> models:           array<mat4x4<f32>>;
 @group(2) @binding(1) var<storage, read> material_indices: array<u32>;
 @group(2) @binding(2) var<storage, read> entity_ids:       array<u32>;
+@group(2) @binding(3) var<storage, read> visible_indices:  array<u32>;
 
 @group(3) @binding(0) var irradiance_map:  texture_cube<f32>;
 @group(3) @binding(1) var prefiltered_env: texture_cube<f32>;
@@ -624,7 +625,8 @@ fn shade_one_light(light: Light, point_to_light: vec3<f32>, v: vec3<f32>, n: vec
 
 @vertex
 fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32) -> VertexOutput {
-    let model = models[instance_index];
+    let slot = visible_indices[instance_index];
+    let model = models[slot];
     var out: VertexOutput;
     let world = model * input.position;
     out.clip_position = view_proj * world;
@@ -634,8 +636,8 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32)
     out.world_tangent = vec4<f32>(world_tangent, input.tangent.w);
     out.uv = input.uv.xy;
     out.color = input.color;
-    out.entity_id = entity_ids[instance_index];
-    out.material_index = material_indices[instance_index];
+    out.entity_id = entity_ids[slot];
+    out.material_index = material_indices[slot];
     let view_mat3 = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);
     out.view_normal = view_mat3 * out.world_normal;
     return out;
