@@ -265,6 +265,9 @@ func handleMenuItem(worlds app.Worlds, hud *HudHandles, entity ecs.Entity) bool 
 		case 4:
 			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
 			settings.ShowNormals = !settings.ShowNormals
+		case 5:
+			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
+			settings.ShowSkeletons = !settings.ShowSkeletons
 		}
 		return true
 	}

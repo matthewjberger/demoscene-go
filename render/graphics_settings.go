@@ -9,11 +9,12 @@ import (
 // pass reads the relevant bool in Prepare/Execute and skips its
 // work when disabled.
 type GraphicsSettings struct {
-	ShowSky     bool
-	ShowGrid    bool
-	FxaaEnabled bool
-	ShowBounds  bool
-	ShowNormals bool
+	ShowSky       bool
+	ShowGrid      bool
+	FxaaEnabled   bool
+	ShowBounds    bool
+	ShowNormals   bool
+	ShowSkeletons bool
 
 	// NormalLineLength scales the per-vertex normal line emitted
 	// when ShowNormals is true. World units.
@@ -21,19 +22,32 @@ type GraphicsSettings struct {
 
 	// NormalLineColor is the RGBA used for the debug normal lines.
 	NormalLineColor [4]float32
+
+	// SkeletonJointSize is the world-unit size of the 3-axis cross
+	// drawn at each joint origin when ShowSkeletons is on.
+	SkeletonJointSize float32
+	// SkeletonJointColor is the cross color.
+	SkeletonJointColor [4]float32
+	// SkeletonBoneColor is the color of segments joining a joint to
+	// its parent joint.
+	SkeletonBoneColor [4]float32
 }
 
 // DefaultGraphicsSettings returns settings with everything enabled
 // except the debug bounding-volume overlay.
 func DefaultGraphicsSettings() GraphicsSettings {
 	return GraphicsSettings{
-		ShowSky:          true,
-		ShowGrid:         true,
-		FxaaEnabled:      true,
-		ShowBounds:       false,
-		ShowNormals:      false,
-		NormalLineLength: 0.08,
-		NormalLineColor:  [4]float32{1.0, 0.92, 0.2, 0.95},
+		ShowSky:            true,
+		ShowGrid:           true,
+		FxaaEnabled:        true,
+		ShowBounds:         false,
+		ShowNormals:        false,
+		ShowSkeletons:      false,
+		NormalLineLength:   0.08,
+		NormalLineColor:    [4]float32{1.0, 0.92, 0.2, 0.95},
+		SkeletonJointSize:  0.04,
+		SkeletonJointColor: [4]float32{0.4, 1.0, 0.4, 1.0},
+		SkeletonBoneColor:  [4]float32{1.0, 0.85, 0.2, 1.0},
 	}
 }
 
@@ -62,6 +76,8 @@ func UpdateGraphicsToggles(world *ecs.World) {
 			settings.ShowBounds = !settings.ShowBounds
 		case 'N':
 			settings.ShowNormals = !settings.ShowNormals
+		case 'K':
+			settings.ShowSkeletons = !settings.ShowSkeletons
 		}
 	}
 }

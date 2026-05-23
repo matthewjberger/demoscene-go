@@ -212,7 +212,7 @@ func buildHud(world *ecs.World) HudHandles {
 	h.EditMenu = buildMenuPopup(b, buttonOffset+1*buttonStride, hudTopBarHeight,
 		[]string{"UNDO", "REDO", "DESELECT"})
 	h.ViewMenu = buildMenuPopup(b, buttonOffset+2*buttonStride, hudTopBarHeight,
-		[]string{"RESET CAMERA", "TOGGLE GRID", "TOGGLE SKY", "TOGGLE BOUNDS", "TOGGLE NORMALS"})
+		[]string{"RESET CAMERA", "TOGGLE GRID", "TOGGLE SKY", "TOGGLE BOUNDS", "TOGGLE NORMALS", "TOGGLE SKELETONS"})
 	h.ContextMenu = buildMenuPopup(b, 0, 0,
 		[]string{"DELETE"})
 

@@ -69,6 +69,7 @@ func buildWorlds(renderer *render.Renderer) (app.Worlds, *app.App) {
 	worlds.EngineSchedule.Push("skin_matrices", pass.PrepareSkinMatrices)
 	worlds.EngineSchedule.Push("bounding_volume_lines", pass.UpdateBoundingVolumeLines)
 	worlds.EngineSchedule.Push("normal_lines", pass.UpdateNormalLines)
+	worlds.EngineSchedule.Push("skeleton_lines", pass.UpdateSkeletonLines)
 	_ = advanceSpinners
 
 	demo := editorApp()
