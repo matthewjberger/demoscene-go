@@ -50,13 +50,15 @@ type SsgiSettings struct {
 	MaxSteps  uint32
 }
 
-// DefaultSsgiSettings matches the reference engine's defaults.
+// DefaultSsgiSettings tuned so the bounce reads as a subtle fill
+// rather than a wash. Intensity 1.0 over-brightens the scene by
+// re-adding already-direct-lit pixels as indirect.
 func DefaultSsgiSettings() SsgiSettings {
 	return SsgiSettings{
 		Enabled:   true,
-		Radius:    1.5,
-		Intensity: 1.0,
-		MaxSteps:  16,
+		Radius:    1.0,
+		Intensity: 0.25,
+		MaxSteps:  12,
 	}
 }
 
