@@ -13,8 +13,8 @@ const DepthFormat = wgpu.TextureFormatDepth32Float
 const HdrFormat = wgpu.TextureFormatRGBA16Float
 
 type Renderer struct {
-	Surface       *wgpu.Surface
-	Adapter       *wgpu.Adapter
+	surface       *wgpu.Surface
+	adapter       *wgpu.Adapter
 	Device        *wgpu.Device
 	Queue         *wgpu.Queue
 	Config        *wgpu.SurfaceConfiguration
@@ -33,7 +33,7 @@ type Renderer struct {
 }
 
 func NewRenderer(instance *wgpu.Instance, surface *wgpu.Surface, width, height uint32) (*Renderer, error) {
-	renderer := &Renderer{Surface: surface}
+	renderer := &Renderer{surface: surface}
 
 	adapter, err := instance.RequestAdapter(&wgpu.RequestAdapterOptions{
 		CompatibleSurface: surface,
@@ -41,7 +41,7 @@ func NewRenderer(instance *wgpu.Instance, surface *wgpu.Surface, width, height u
 	if err != nil {
 		return nil, fmt.Errorf("render: request adapter: %w", err)
 	}
-	renderer.Adapter = adapter
+	renderer.adapter = adapter
 
 	device, err := adapter.RequestDevice(nil)
 	if err != nil {
@@ -201,18 +201,18 @@ func (r *Renderer) AspectRatio() float32 {
 func (r *Renderer) Resize(width, height uint32) error {
 	r.Config.Width = width
 	r.Config.Height = height
-	r.Surface.Configure(r.Adapter, r.Device, r.Config)
+	r.surface.Configure(r.adapter, r.Device, r.Config)
 	return r.Graph.ResizeTransients(r.Device, width, height)
 }
 
 func (r *Renderer) Reconfigure() {
-	r.Surface.Configure(r.Adapter, r.Device, r.Config)
+	r.surface.Configure(r.adapter, r.Device, r.Config)
 }
 
 func RenderFrame(r *Renderer, world *ecs.World) error {
 	DrainCommands(world, r)
 
-	surfaceTexture, err := r.Surface.GetCurrentTexture()
+	surfaceTexture, err := r.surface.GetCurrentTexture()
 	if err != nil {
 		return wrapSurfaceErr(err)
 	}
@@ -242,7 +242,7 @@ func RenderFrame(r *Renderer, world *ecs.World) error {
 	defer cmd.Release()
 
 	r.Queue.Submit(cmd)
-	r.Surface.Present()
+	r.surface.Present()
 	return nil
 }
 
@@ -260,11 +260,11 @@ func (r *Renderer) Release() {
 	if r.Device != nil {
 		r.Device.Release()
 	}
-	if r.Adapter != nil {
-		r.Adapter.Release()
+	if r.adapter != nil {
+		r.adapter.Release()
 	}
-	if r.Surface != nil {
-		r.Surface.Release()
+	if r.surface != nil {
+		r.surface.Release()
 	}
 }
 
