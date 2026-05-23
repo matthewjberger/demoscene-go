@@ -50,15 +50,13 @@ type SsgiSettings struct {
 	MaxSteps  uint32
 }
 
-// DefaultSsgiSettings tuned so the bounce reads as a subtle fill
-// rather than a wash. Intensity 1.0 over-brightens the scene by
-// re-adding already-direct-lit pixels as indirect.
+// DefaultSsgiSettings matches the reference engine's defaults.
 func DefaultSsgiSettings() SsgiSettings {
 	return SsgiSettings{
-		Enabled:   false,
-		Radius:    1.0,
-		Intensity: 0.25,
-		MaxSteps:  12,
+		Enabled:   true,
+		Radius:    2.0,
+		Intensity: 1.0,
+		MaxSteps:  16,
 	}
 }
 
@@ -303,9 +301,22 @@ func newSsgiState(device *wgpu.Device, aspect func() float32) (*ssgiPassState, e
 
 func ssgiPrepare(s any, context *render.PassContext) error {
 	state := s.(*ssgiPassState)
-	width, height, err := ssaoSize(context, "depth")
+	fullWidth, fullHeight, err := ssaoSize(context, "depth")
 	if err != nil {
 		return err
+	}
+	// SSGI runs at half resolution: 4x less ray-march cost and the
+	// 2x2 upsample to full res via the postprocess linear sampler
+	// hides the per-pixel kernel jitter that otherwise reads as
+	// screen-locked ghosting during camera motion. Matches the
+	// reference engine's setup exactly.
+	width := fullWidth / 2
+	if width == 0 {
+		width = 1
+	}
+	height := fullHeight / 2
+	if height == 0 {
+		height = 1
 	}
 	if state.currentWidth != width || state.currentHeight != height {
 		if err := state.recreateRawTexture(context.Device, width, height); err != nil {
@@ -464,15 +475,24 @@ func (state *ssgiPassState) recreateRawTexture(device *wgpu.Device, width, heigh
 	return nil
 }
 
+// buildSsgiKernel mirrors the reference engine's kernel build:
+// each sample is a hemisphere-aligned unit vector (Z in [0.1, 1.0])
+// then multiplied by an index-weighted scale that biases the
+// distribution toward small offsets. The squared falloff keeps
+// most rays close to the surface, which avoids the long, jittery
+// ray-march hits at far-away neighbors that produce the screen-
+// locked ghost trails during camera motion.
 func buildSsgiKernel() []mgl32.Vec4 {
 	rng := rand.New(rand.NewSource(3))
 	kernel := make([]mgl32.Vec4, ssgiKernelSize)
 	for index := 0; index < ssgiKernelSize; index++ {
-		sample := mgl32.Vec3{
-			float32(rng.Float64()*2 - 1),
-			float32(rng.Float64()*2 - 1),
-			float32(rng.Float64()),
-		}.Normalize()
+		x := float32(rng.Float64()*2 - 1)
+		y := float32(rng.Float64()*2 - 1)
+		z := float32(rng.Float64()*0.9 + 0.1)
+		sample := mgl32.Vec3{x, y, z}.Normalize()
+		t := float32(index) / float32(ssgiKernelSize)
+		scale := 0.1 + t*t*0.9
+		sample = sample.Mul(scale)
 		kernel[index] = mgl32.Vec4{sample.X(), sample.Y(), sample.Z(), 0}
 	}
 	return kernel
@@ -549,9 +569,17 @@ func newSsgiBlurState(device *wgpu.Device, owner *ssgiPassState) (*ssgiBlurPassS
 
 func ssgiBlurPrepare(s any, context *render.PassContext) error {
 	state := s.(*ssgiBlurPassState)
-	width, height, err := ssaoSize(context, "depth")
+	fullWidth, fullHeight, err := ssaoSize(context, "depth")
 	if err != nil {
 		return err
+	}
+	width := fullWidth / 2
+	if width == 0 {
+		width = 1
+	}
+	height := fullHeight / 2
+	if height == 0 {
+		height = 1
 	}
 	if state.currentWidth != width || state.currentHeight != height {
 		if err := state.recreateOutput(context.Device, width, height); err != nil {
