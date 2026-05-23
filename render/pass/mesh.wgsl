@@ -698,11 +698,6 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     if (mat.alpha_mode == 1u && base_color.a < mat.alpha_cutoff) {
         discard;
     }
-    // Blend-mode (alpha_mode == 2u) materials route through the
-    // weighted-OIT pass instead of the opaque mesh path. Skipping
-    // them here keeps the opaque pass alpha-free and lets the OIT
-    // composite later layer them on top with proper depth-aware
-    // transparency.
     if (mat.alpha_mode == 2u) {
         discard;
     }
@@ -817,12 +812,6 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     let color = ambient + lo + emissive;
 
     var output: FragmentOutput;
-    // Opaque + Mask paths force alpha to 1 so scene_color stays
-    // fully opaque regardless of the material's base color alpha
-    // channel (which AlphaModeOpaque is supposed to ignore per
-    // the glTF spec). Blend materials are discarded earlier and
-    // re-routed through the OIT pass, so this branch never sees
-    // alpha < 1 cases that should preserve the source alpha.
     output.color = vec4<f32>(color, 1.0);
     output.entity_id = in.entity_id;
     output.view_normal = vec4<f32>(normalize(in.view_normal), 1.0);

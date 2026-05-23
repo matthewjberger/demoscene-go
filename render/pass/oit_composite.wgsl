@@ -1,10 +1,6 @@
-// Weighted-blended OIT resolve. Reads the accumulation buffer
-// (sum of weight * color, alpha = sum of weight) and the reveal
-// buffer (product of (1 - alpha) for every fragment, kept on the
-// hardware via Zero+OneMinusSrcAlpha blend). Composites the
-// resulting transparent color back into scene_color via a
-// standard SrcAlpha / OneMinusSrcAlpha blend so the opaque pass's
-// result becomes the background.
+// Weighted-blended OIT resolve. accum.rgb / accum.a is the
+// weighted-average color; 1 - reveal is the over-alpha used to
+// blend into scene_color.
 
 @group(0) @binding(0) var accum_texture: texture_2d<f32>;
 @group(0) @binding(1) var accum_sampler: sampler;
@@ -30,8 +26,6 @@ fn vertex_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 fn fragment_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let accum = textureSample(accum_texture, accum_sampler, in.uv);
     let reveal = textureSample(reveal_texture, reveal_sampler, in.uv).r;
-    // accum.a holds the sum of weights; divide rgb by it to get
-    // weighted-average color. Out-alpha is 1 - reveal_product.
     let avg = accum.rgb / max(accum.a, 1e-5);
     let out_alpha = clamp(1.0 - reveal, 0.0, 1.0);
     return vec4<f32>(avg, out_alpha);

@@ -1,18 +1,6 @@
-// Weighted-blended OIT accumulation pass (McGuire / Bavoil with
-// the reference engine's depth-aware weight). Vertex stage is the
-// same instanced mesh layout the opaque mesh pass uses (model +
-// material id + entity id storage buffers per handle). Fragment
-// stage shades with a basic lit color (no full PBR yet -- shadows
-// + IBL on the OIT path can come later) and writes two targets:
-//
-//   accum  (Rgba16Float)  blend One+One       += w * vec4(c, 1)
-//   reveal (R8Unorm)      blend Zero+OneMinus *= (1 - alpha)
-//
-// The composite pass then resolves `accum.rgb / accum.a` blended
-// over scene_color with `1 - reveal` as the alpha.
-//
-// Materials that are NOT blend-mode are discarded so this shader
-// only contributes to genuinely transparent geometry.
+// Weighted-blended OIT accumulation. accum (One+One additive),
+// reveal (Zero+OneMinusSrc multiplicative). Composite resolves
+// accum.rgb / accum.a with (1 - reveal) as the over-alpha.
 
 struct ViewProj {
     view_proj:       mat4x4<f32>,
@@ -108,12 +96,6 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32)
     return out;
 }
 
-// weight is the reference engine's depth-aware OIT weight: alpha
-// times a clamp of 0.03 / (epsilon + (view_z / z_scale)^4). Higher
-// values for closer fragments so they dominate the accumulation;
-// the alpha factor zeros out fully-transparent fragments. The
-// clamp prevents both underflow at the far plane and overflow at
-// the near plane.
 fn oit_weight(view_z: f32, a: f32) -> f32 {
     let z_scale = max(view_proj_uniform.oit_z_scale, 1.0);
     let z_ratio = view_z / z_scale;
@@ -122,16 +104,11 @@ fn oit_weight(view_z: f32, a: f32) -> f32 {
 
 @fragment
 fn fragment_main(in: VertexOutput) -> OitOutput {
-    // Derivatives must be evaluated under uniform control flow,
-    // before any non-uniform discard or material branch. Pass
-    // them explicitly to textureSampleGrad so the sampler call
-    // itself is allowed inside the per-material branch below.
+    // Derivatives must come from uniform control flow.
     let ddx_uv = dpdx(in.uv);
     let ddy_uv = dpdy(in.uv);
 
     let mat = materials[in.material_index];
-    // Skip non-blend materials so the OIT pass only contributes
-    // genuine transparency. The opaque mesh pass renders them.
     if (mat.alpha_mode != 2u) {
         discard;
     }

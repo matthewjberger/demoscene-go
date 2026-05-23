@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
@@ -1170,14 +1171,18 @@ func decodeGltfImage(doc *gltf.Document, img *gltf.Image, baseDir string) ([]byt
 	w := uint32(bounds.Dx())
 	h := uint32(bounds.Dy())
 	pixels := make([]byte, w*h*4)
+	// .RGBA() returns premultiplied values, which zero out RGB
+	// on transparent pixels. OPAQUE-mode materials with alpha-
+	// textured base color need the unmodified RGB so glTF's
+	// "alpha is ignored" semantics show the texture's color.
 	for y := 0; y < int(h); y++ {
 		for x := 0; x < int(w); x++ {
-			r, g, b, a := decoded.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+			c := color.NRGBAModel.Convert(decoded.At(bounds.Min.X+x, bounds.Min.Y+y)).(color.NRGBA)
 			i := (y*int(w) + x) * 4
-			pixels[i+0] = byte(r >> 8)
-			pixels[i+1] = byte(g >> 8)
-			pixels[i+2] = byte(b >> 8)
-			pixels[i+3] = byte(a >> 8)
+			pixels[i+0] = c.R
+			pixels[i+1] = c.G
+			pixels[i+2] = c.B
+			pixels[i+3] = c.A
 		}
 	}
 	return pixels, w, h, nil

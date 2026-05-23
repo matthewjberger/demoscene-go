@@ -45,13 +45,8 @@ type oitMeshPassState struct {
 }
 
 // AddOitMeshPass registers the weighted-OIT accumulation pass.
-// Borrows the static mesh pass's per-handle bind groups (same
-// layout: model + material_index + entity_id) so transparent
-// entities reuse the bookkeeping the opaque pass already
-// maintains. Writes accum (Rgba16Float, additive blend) +
-// reveal (R8Unorm, multiply-by-1-alpha) targets. Reads scene
-// depth without writing it so opaque geometry occludes
-// transparent fragments correctly.
+// Writes accum (Rgba16Float, additive blend) + reveal (R8Unorm,
+// multiply-by-1-alpha) targets. Reads depth without writing it.
 func AddOitMeshPass(renderer *render.Renderer) (*render.Pass, error) {
 	state, err := newOitMeshState(renderer.Device, renderer.AspectRatio)
 	if err != nil {
@@ -161,13 +156,8 @@ func newOitMeshState(device *wgpu.Device, aspect func() float32) (*oitMeshPassSt
 		DepthStencil: &wgpu.DepthStencilState{
 			Format:            render.DepthFormat,
 			DepthWriteEnabled: false,
-			// LessEqual so transparent fragments co-planar with
-			// opaque geometry still pass (matches the reference
-			// engine's GreaterEqual under inverse-Z). Less would
-			// reject every transparent fragment whose depth ties
-			// the wall behind it -- the AlphaBlendModeTest blend
-			// rectangles sit at the exact same z as the test
-			// card's marble surface, so Less drops them all.
+			// LessEqual lets transparent fragments co-planar with
+			// opaque geometry pass; Less would reject them.
 			DepthCompare: wgpu.CompareFunctionLessEqual,
 			StencilFront: wgpu.StencilFaceState{
 				Compare:     wgpu.CompareFunctionAlways,
@@ -189,10 +179,8 @@ func newOitMeshState(device *wgpu.Device, aspect func() float32) (*oitMeshPassSt
 			Targets: []wgpu.ColorTargetState{
 				{Format: render.HdrFormat, Blend: &accumBlend, WriteMask: wgpu.ColorWriteMaskAll},
 				{Format: wgpu.TextureFormatR8Unorm, Blend: &revealBlend, WriteMask: wgpu.ColorWriteMaskRed},
-				// entity_id: no blend, red-only write. Last
-				// drawn transparent fragment wins per-pixel,
-				// matching the reference engine's picking
-				// behavior for blended geometry.
+				// entity_id: no blend, red-only write. Last-
+				// written transparent fragment wins per-pixel.
 				{Format: render.EntityIdFormat, WriteMask: wgpu.ColorWriteMaskRed},
 			},
 		},
@@ -249,9 +237,7 @@ func oitMeshPrepare(s any, context *render.PassContext) error {
 		ViewProj:       viewProj,
 		CameraPosition: cameraPos,
 		CameraZFar:     zFar,
-		// 20% of camera far as the OIT z-scale matches the
-		// reference engine's heuristic (oit_z_scale = far * 0.2).
-		OitZScale: zFar * 0.2,
+		OitZScale:      zFar * 0.2,
 	}
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.viewProjBuffer, 0, bytesOf(&uniform))
 
@@ -335,20 +321,11 @@ func oitMeshExecute(s any, context *render.PassContext) error {
 	if err != nil {
 		return err
 	}
-	// The static mesh pass already wrote opaque entity IDs into
-	// this attachment. Load them so unblended transparent writes
-	// don't clobber opaque fragments where no transparent
-	// fragment lands.
 	entityID.LoadOp = wgpu.LoadOpLoad
 	depth, err := context.DepthAttachment("depth")
 	if err != nil {
 		return err
 	}
-	// OIT reads depth but the pipeline's depth_write_enabled is
-	// false so it never actually writes. Don't set ReadOnly: per
-	// WebGPU spec that requires LoadOp/StoreOp to be undefined,
-	// which the reference engine sidesteps by just leaving plain
-	// Load/Store and letting the pipeline state control writes.
 	depth.DepthLoadOp = wgpu.LoadOpLoad
 	depth.DepthStoreOp = wgpu.StoreOpStore
 	depth.StencilLoadOp = wgpu.LoadOpLoad
@@ -420,10 +397,8 @@ type oitCompositePassState struct {
 	lastRevealView  *wgpu.TextureView
 }
 
-// AddOitCompositePass registers the full-screen OIT resolve.
-// Reads accum + reveal, writes the blended result into
-// scene_color via standard alpha blending so opaque pixels show
-// through where transparents didn't touch.
+// AddOitCompositePass resolves accum + reveal into scene_color
+// via standard alpha blending.
 func AddOitCompositePass(renderer *render.Renderer) (*render.Pass, error) {
 	state, err := newOitCompositeState(renderer.Device)
 	if err != nil {

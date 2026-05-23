@@ -129,13 +129,24 @@ func resolveCycleTarget(engine *ecs.World, state *pickCycleState, leaf ecs.Entit
 	return chain[depth]
 }
 
-// findEntityByID returns the RenderMesh-bearing entity whose
-// runtime ID matches the GPU pick result.
+// findEntityByID returns the mesh-bearing entity whose runtime ID
+// matches the GPU pick result; checks both static RenderMesh and
+// skinned SkinnedMesh component archetypes.
 func findEntityByID(engine *ecs.World, id uint32) (ecs.Entity, bool) {
-	renderMask := ecs.MustMaskOf[asset.RenderMesh](engine)
 	var picked ecs.Entity
 	found := false
+	renderMask := ecs.MustMaskOf[asset.RenderMesh](engine)
 	engine.ForEach(renderMask, 0, func(e ecs.Entity, _ *ecs.Archetype, _ int) {
+		if !found && e.ID == id {
+			picked = e
+			found = true
+		}
+	})
+	if found {
+		return picked, true
+	}
+	skinnedMask := ecs.MustMaskOf[asset.SkinnedMesh](engine)
+	engine.ForEach(skinnedMask, 0, func(e ecs.Entity, _ *ecs.Archetype, _ int) {
 		if !found && e.ID == id {
 			picked = e
 			found = true
