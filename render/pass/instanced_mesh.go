@@ -36,22 +36,14 @@ type instancedPerEntity struct {
 	Pad2      uint32
 }
 
-type instancedEntityState struct {
-	capacity         int
-	uploadedCount    int
-	localBuffer      *wgpu.Buffer
-	worldBuffer      *wgpu.Buffer
-	computeUniform   *wgpu.Buffer
-	computeBindGroup *wgpu.BindGroup
-	perEntityBuffer  *wgpu.Buffer
-	renderBindGroup  *wgpu.BindGroup
-	instanceCount    uint32
+type instancedRenderEntity struct {
+	perEntityBuffer *wgpu.Buffer
+	bindGroup       *wgpu.BindGroup
+	generation      uint64
+	worldBuffer     *wgpu.Buffer
 }
 
 type instancedMeshState struct {
-	computePipeline *wgpu.ComputePipeline
-	computeLayout   *wgpu.BindGroupLayout
-
 	pipeline       *wgpu.RenderPipeline
 	viewProjLayout *wgpu.BindGroupLayout
 	globalLayout   *wgpu.BindGroupLayout
@@ -62,15 +54,14 @@ type instancedMeshState struct {
 	globalGroup    *wgpu.BindGroup
 	aspectFn       func() float32
 
-	perEntity map[ecs.Entity]*instancedEntityState
+	perEntity map[ecs.Entity]*instancedRenderEntity
 }
 
-// AddInstancedMeshPass renders InstancedMesh entities. A compute
-// dispatch multiplies the entity's parent GlobalTransform by each
-// instance's local matrix to fill a world-matrix buffer, then a
-// single instanced draw renders every instance reading that buffer
-// by instance index. Writes scene_color + entity_id + view_normals
-// like the other geometry passes.
+// AddInstancedMeshPass renders InstancedMesh entities. World
+// matrices come from the InstancedCompute pass (which must run
+// earlier); this pass issues one instanced draw per entity reading
+// that world-matrix buffer by instance index. Writes scene_color +
+// entity_id + view_normals like the other geometry passes.
 func AddInstancedMeshPass(renderer *render.Renderer) (*render.Pass, error) {
 	state, err := newInstancedMeshState(renderer.Device, renderer.AspectRatio)
 	if err != nil {
@@ -96,51 +87,11 @@ func AddInstancedMeshPass(renderer *render.Renderer) (*render.Pass, error) {
 }
 
 func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instancedMeshState, error) {
-	computeModule, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
-		Label:          "instanced_transform shader",
-		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{Code: instancedTransformShader},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("instanced_mesh: compute shader: %w", err)
-	}
-	defer computeModule.Release()
-
-	computeLayout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
-		Label: "instanced_transform layout",
-		Entries: []wgpu.BindGroupLayoutEntry{
-			{Binding: 0, Visibility: wgpu.ShaderStageCompute, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
-			{Binding: 1, Visibility: wgpu.ShaderStageCompute, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeStorage}},
-			{Binding: 2, Visibility: wgpu.ShaderStageCompute, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeUniform}},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("instanced_mesh: compute layout: %w", err)
-	}
-	computePipelineLayout, err := device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
-		Label:            "instanced_transform pipeline layout",
-		BindGroupLayouts: []*wgpu.BindGroupLayout{computeLayout},
-	})
-	if err != nil {
-		computeLayout.Release()
-		return nil, fmt.Errorf("instanced_mesh: compute pipeline layout: %w", err)
-	}
-	defer computePipelineLayout.Release()
-	computePipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
-		Layout:  computePipelineLayout,
-		Compute: wgpu.ProgrammableStageDescriptor{Module: computeModule, EntryPoint: "main"},
-	})
-	if err != nil {
-		computeLayout.Release()
-		return nil, fmt.Errorf("instanced_mesh: compute pipeline: %w", err)
-	}
-
 	module, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
 		Label:          "instanced_mesh shader",
 		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{Code: instancedMeshShader},
 	})
 	if err != nil {
-		computePipeline.Release()
-		computeLayout.Release()
 		return nil, fmt.Errorf("instanced_mesh: shader: %w", err)
 	}
 	defer module.Release()
@@ -152,8 +103,6 @@ func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instanc
 		}},
 	})
 	if err != nil {
-		computePipeline.Release()
-		computeLayout.Release()
 		return nil, fmt.Errorf("instanced_mesh: view_proj layout: %w", err)
 	}
 	globalLayout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
@@ -163,8 +112,6 @@ func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instanc
 		}},
 	})
 	if err != nil {
-		computePipeline.Release()
-		computeLayout.Release()
 		viewProjLayout.Release()
 		return nil, fmt.Errorf("instanced_mesh: global layout: %w", err)
 	}
@@ -176,8 +123,6 @@ func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instanc
 		},
 	})
 	if err != nil {
-		computePipeline.Release()
-		computeLayout.Release()
 		viewProjLayout.Release()
 		globalLayout.Release()
 		return nil, fmt.Errorf("instanced_mesh: handle layout: %w", err)
@@ -188,8 +133,6 @@ func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instanc
 		BindGroupLayouts: []*wgpu.BindGroupLayout{viewProjLayout, globalLayout, handleLayout},
 	})
 	if err != nil {
-		computePipeline.Release()
-		computeLayout.Release()
 		viewProjLayout.Release()
 		globalLayout.Release()
 		handleLayout.Release()
@@ -235,8 +178,6 @@ func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instanc
 		},
 	})
 	if err != nil {
-		computePipeline.Release()
-		computeLayout.Release()
 		viewProjLayout.Release()
 		globalLayout.Release()
 		handleLayout.Release()
@@ -269,17 +210,15 @@ func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instanc
 	}
 
 	return &instancedMeshState{
-		computePipeline: computePipeline,
-		computeLayout:   computeLayout,
-		pipeline:        pipeline,
-		viewProjLayout:  viewProjLayout,
-		globalLayout:    globalLayout,
-		handleLayout:    handleLayout,
-		viewProjBuffer:  viewProjBuffer,
-		viewProjGroup:   viewProjGroup,
-		uniformBuffer:   uniformBuffer,
-		aspectFn:        aspect,
-		perEntity:       make(map[ecs.Entity]*instancedEntityState),
+		pipeline:       pipeline,
+		viewProjLayout: viewProjLayout,
+		globalLayout:   globalLayout,
+		handleLayout:   handleLayout,
+		viewProjBuffer: viewProjBuffer,
+		viewProjGroup:  viewProjGroup,
+		uniformBuffer:  uniformBuffer,
+		aspectFn:       aspect,
+		perEntity:      make(map[ecs.Entity]*instancedRenderEntity),
 	}, nil
 }
 
@@ -308,73 +247,23 @@ func instancedMeshPrepare(s any, context *render.PassContext) error {
 		state.globalGroup = bg
 	}
 
+	computeRes, ok := ecs.Resource[InstancedComputeResource](context.World)
+	if !ok || computeRes == nil || computeRes.Compute == nil {
+		return nil
+	}
+	compute := computeRes.Compute
+
 	mask := ecs.MustMaskOf[asset.InstancedMesh](context.World) |
 		ecs.MustMaskOf[transform.GlobalTransform](context.World)
 	context.World.ForEach(mask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
-		inst, _ := ecs.Get[asset.InstancedMesh](context.World, entity)
-		if inst == nil || len(inst.Instances) == 0 {
-			return
-		}
-		global, ok := ecs.Get[transform.GlobalTransform](context.World, entity)
-		if !ok {
+		worldBuffer := compute.WorldBuffer(entity)
+		if worldBuffer == nil || compute.InstanceCount(entity) == 0 {
 			return
 		}
 		es := state.perEntity[entity]
 		if es == nil {
-			es = &instancedEntityState{}
+			es = &instancedRenderEntity{}
 			state.perEntity[entity] = es
-		}
-		count := len(inst.Instances)
-		matBytes := int(unsafe.Sizeof(mgl32.Mat4{}))
-		if es.capacity < count {
-			if es.localBuffer != nil {
-				es.localBuffer.Release()
-			}
-			if es.worldBuffer != nil {
-				es.worldBuffer.Release()
-			}
-			localBuf, err := context.Device.CreateBuffer(&wgpu.BufferDescriptor{
-				Label: "instanced local matrices",
-				Size:  uint64(count) * uint64(matBytes),
-				Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
-			})
-			if err != nil {
-				delete(state.perEntity, entity)
-				return
-			}
-			worldBuf, err := context.Device.CreateBuffer(&wgpu.BufferDescriptor{
-				Label: "instanced world matrices",
-				Size:  uint64(count) * uint64(matBytes),
-				Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
-			})
-			if err != nil {
-				localBuf.Release()
-				delete(state.perEntity, entity)
-				return
-			}
-			es.localBuffer = localBuf
-			es.worldBuffer = worldBuf
-			es.capacity = count
-			es.uploadedCount = 0
-			if es.computeBindGroup != nil {
-				es.computeBindGroup.Release()
-				es.computeBindGroup = nil
-			}
-			if es.renderBindGroup != nil {
-				es.renderBindGroup.Release()
-				es.renderBindGroup = nil
-			}
-		}
-		if es.computeUniform == nil {
-			buf, err := context.Device.CreateBuffer(&wgpu.BufferDescriptor{
-				Label: "instanced compute uniform",
-				Size:  uint64(unsafe.Sizeof(instancedComputeUniform{})),
-				Usage: wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
-			})
-			if err != nil {
-				return
-			}
-			es.computeUniform = buf
 		}
 		if es.perEntityBuffer == nil {
 			buf, err := context.Device.CreateBuffer(&wgpu.BufferDescriptor{
@@ -383,81 +272,53 @@ func instancedMeshPrepare(s any, context *render.PassContext) error {
 				Usage: wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
 			})
 			if err != nil {
+				delete(state.perEntity, entity)
 				return
 			}
 			es.perEntityBuffer = buf
 		}
-
-		// Local matrices are static unless the instance list grows;
-		// upload once per (re)allocation.
-		if es.uploadedCount != count {
-			writeBuffer(context.Device, context.Queue, context.Encoder, es.localBuffer, 0, unsafe.Slice((*byte)(unsafe.Pointer(&inst.Instances[0])), count*matBytes))
-			es.uploadedCount = count
-		}
-
-		cu := instancedComputeUniform{ParentTransform: global.Matrix, InstanceCount: uint32(count)}
-		writeBuffer(context.Device, context.Queue, context.Encoder, es.computeUniform, 0, bytesOf(&cu))
-
 		per := instancedPerEntity{BaseColor: [4]float32{1, 1, 1, 1}, EntityID: entity.ID}
 		if material, ok := ecs.Get[asset.Material](context.World, entity); ok && material != nil {
 			per.BaseColor = material.BaseColor
 		}
 		writeBuffer(context.Device, context.Queue, context.Encoder, es.perEntityBuffer, 0, bytesOf(&per))
 
-		if es.computeBindGroup == nil {
-			bg, err := context.Device.CreateBindGroup(&wgpu.BindGroupDescriptor{
-				Label:  "instanced compute bg",
-				Layout: state.computeLayout,
-				Entries: []wgpu.BindGroupEntry{
-					{Binding: 0, Buffer: es.localBuffer, Offset: 0, Size: wgpu.WholeSize},
-					{Binding: 1, Buffer: es.worldBuffer, Offset: 0, Size: wgpu.WholeSize},
-					{Binding: 2, Buffer: es.computeUniform, Offset: 0, Size: uint64(unsafe.Sizeof(instancedComputeUniform{}))},
-				},
-			})
-			if err != nil {
-				return
-			}
-			es.computeBindGroup = bg
+		generation := compute.Generation(entity)
+		if es.bindGroup != nil && (es.generation != generation || es.worldBuffer != worldBuffer) {
+			es.bindGroup.Release()
+			es.bindGroup = nil
 		}
-		if es.renderBindGroup == nil {
+		if es.bindGroup == nil {
 			bg, err := context.Device.CreateBindGroup(&wgpu.BindGroupDescriptor{
 				Label:  "instanced render bg",
 				Layout: state.handleLayout,
 				Entries: []wgpu.BindGroupEntry{
-					{Binding: 0, Buffer: es.worldBuffer, Offset: 0, Size: wgpu.WholeSize},
+					{Binding: 0, Buffer: worldBuffer, Offset: 0, Size: wgpu.WholeSize},
 					{Binding: 1, Buffer: es.perEntityBuffer, Offset: 0, Size: uint64(unsafe.Sizeof(instancedPerEntity{}))},
 				},
 			})
 			if err != nil {
 				return
 			}
-			es.renderBindGroup = bg
+			es.bindGroup = bg
+			es.generation = generation
+			es.worldBuffer = worldBuffer
 		}
-		es.instanceCount = uint32(count)
 	})
 	return nil
 }
 
 func instancedMeshExecute(s any, context *render.PassContext) error {
 	state := s.(*instancedMeshState)
+	computeRes, ok := ecs.Resource[InstancedComputeResource](context.World)
+	if !ok || computeRes == nil || computeRes.Compute == nil {
+		return nil
+	}
+	compute := computeRes.Compute
 	if len(state.perEntity) == 0 {
 		return nil
 	}
 	assets := ecs.MustResource[asset.MeshAssetsResource](context.World).Assets
-
-	// Compute world matrices for every instanced entity before the
-	// render pass opens.
-	computePass := context.Encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
-	computePass.SetPipeline(state.computePipeline)
-	for _, es := range state.perEntity {
-		if es.computeBindGroup == nil || es.instanceCount == 0 {
-			continue
-		}
-		computePass.SetBindGroup(0, es.computeBindGroup, nil)
-		computePass.DispatchWorkgroups((es.instanceCount+63)/64, 1, 1)
-	}
-	computePass.End()
-	computePass.Release()
 
 	colorAttachment, err := context.ColorAttachment("color")
 	if err != nil {
@@ -497,16 +358,20 @@ func instancedMeshExecute(s any, context *render.PassContext) error {
 			return
 		}
 		es := state.perEntity[entity]
-		if es == nil || es.renderBindGroup == nil || es.instanceCount == 0 {
+		if es == nil || es.bindGroup == nil {
+			return
+		}
+		count := compute.InstanceCount(entity)
+		if count == 0 {
 			return
 		}
 		entry, ok := assets.Lookup(inst.Mesh)
 		if !ok {
 			return
 		}
-		passEnc.SetBindGroup(2, es.renderBindGroup, nil)
+		passEnc.SetBindGroup(2, es.bindGroup, nil)
 		passEnc.SetVertexBuffer(0, entry.Vertices, 0, wgpu.WholeSize)
-		passEnc.Draw(entry.VertexCount, es.instanceCount, 0, 0)
+		passEnc.Draw(entry.VertexCount, count, 0, 0)
 	})
 	passEnc.End()
 	passEnc.Release()
@@ -516,16 +381,11 @@ func instancedMeshExecute(s any, context *render.PassContext) error {
 func instancedMeshRelease(s any) {
 	state := s.(*instancedMeshState)
 	for _, es := range state.perEntity {
-		for _, b := range []*wgpu.Buffer{es.localBuffer, es.worldBuffer, es.computeUniform, es.perEntityBuffer} {
-			if b != nil {
-				b.Release()
-			}
+		if es.perEntityBuffer != nil {
+			es.perEntityBuffer.Release()
 		}
-		if es.computeBindGroup != nil {
-			es.computeBindGroup.Release()
-		}
-		if es.renderBindGroup != nil {
-			es.renderBindGroup.Release()
+		if es.bindGroup != nil {
+			es.bindGroup.Release()
 		}
 	}
 	state.perEntity = nil
@@ -544,9 +404,6 @@ func instancedMeshRelease(s any) {
 	if state.pipeline != nil {
 		state.pipeline.Release()
 	}
-	if state.computePipeline != nil {
-		state.computePipeline.Release()
-	}
 	if state.handleLayout != nil {
 		state.handleLayout.Release()
 	}
@@ -555,8 +412,5 @@ func instancedMeshRelease(s any) {
 	}
 	if state.viewProjLayout != nil {
 		state.viewProjLayout.Release()
-	}
-	if state.computeLayout != nil {
-		state.computeLayout.Release()
 	}
 }

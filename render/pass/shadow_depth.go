@@ -80,6 +80,7 @@ type shadowDepthPassState struct {
 	skinnedPipeline       *wgpu.RenderPipeline
 	skinnedHandleBgLayout *wgpu.BindGroupLayout
 	skinnedJointBindCache map[ecs.Entity]*shadowSkinnedEntry
+	instancedBindCache    map[ecs.Entity]*shadowInstancedEntry
 }
 
 type shadowSkinnedEntry struct {
@@ -87,6 +88,12 @@ type shadowSkinnedEntry struct {
 	bindGroup    *wgpu.BindGroup
 	jointGen     uint64
 	jointBuffer  *wgpu.Buffer
+}
+
+type shadowInstancedEntry struct {
+	bindGroup   *wgpu.BindGroup
+	generation  uint64
+	worldBuffer *wgpu.Buffer
 }
 
 // NewShadow allocates the cascade depth texture (2D array, one
@@ -374,6 +381,7 @@ func NewShadowDepthPass(device *wgpu.Device, shadow *Shadow) (*render.Pass, erro
 	}
 	state.skinnedHandleBgLayout = skinnedHandleBgLayout
 	state.skinnedJointBindCache = make(map[ecs.Entity]*shadowSkinnedEntry)
+	state.instancedBindCache = make(map[ecs.Entity]*shadowInstancedEntry)
 
 	skinnedShader, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
 		Label:          "skinned_shadow_depth shader",
@@ -712,6 +720,62 @@ func shadowDepthExecute(s any, context *render.PassContext) error {
 			pass.Draw(entry.VertexCount, uint32(len(bucket.slotEntity)), 0, 0)
 		}
 
+		// Draw instanced mesh entities into the same cascade. The
+		// instanced world-matrix buffer (from InstancedCompute) binds
+		// at group 1 binding 0 exactly like the static handle's model
+		// buffer, so the static shadow pipeline + shader draw it
+		// directly with one instanced call per entity.
+		if instancedRes, ok := ecs.Resource[InstancedComputeResource](context.World); ok && instancedRes != nil && instancedRes.Compute != nil {
+			compute := instancedRes.Compute
+			instancedMask := ecs.MustMaskOf[asset.InstancedMesh](context.World)
+			var instErr error
+			context.World.ForEach(instancedMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
+				if instErr != nil {
+					return
+				}
+				inst, _ := ecs.Get[asset.InstancedMesh](context.World, entity)
+				if inst == nil {
+					return
+				}
+				worldBuffer := compute.WorldBuffer(entity)
+				count := compute.InstanceCount(entity)
+				if worldBuffer == nil || count == 0 {
+					return
+				}
+				entry, ok := assets.Lookup(inst.Mesh)
+				if !ok {
+					return
+				}
+				generation := compute.Generation(entity)
+				cached := state.instancedBindCache[entity]
+				if cached != nil && (cached.generation != generation || cached.worldBuffer != worldBuffer) {
+					cached.bindGroup.Release()
+					cached = nil
+				}
+				if cached == nil {
+					bg, err := context.Device.CreateBindGroup(&wgpu.BindGroupDescriptor{
+						Label:   "shadow instanced handle bg",
+						Layout:  state.handleBgLayout,
+						Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: worldBuffer, Offset: 0, Size: wgpu.WholeSize}},
+					})
+					if err != nil {
+						instErr = err
+						return
+					}
+					cached = &shadowInstancedEntry{bindGroup: bg, generation: generation, worldBuffer: worldBuffer}
+					state.instancedBindCache[entity] = cached
+				}
+				pass.SetBindGroup(1, cached.bindGroup, nil)
+				pass.SetVertexBuffer(0, entry.Vertices, 0, wgpu.WholeSize)
+				pass.Draw(entry.VertexCount, count, 0, 0)
+			})
+			if instErr != nil {
+				pass.End()
+				pass.Release()
+				return instErr
+			}
+		}
+
 		// Draw skinned mesh entities into the same cascade using
 		// the parallel skinned pipeline. The cascade view-proj
 		// bind group is layout-compatible across both pipelines
@@ -772,6 +836,12 @@ func shadowDepthRelease(s any) {
 		}
 	}
 	state.skinnedJointBindCache = nil
+	for _, entry := range state.instancedBindCache {
+		if entry != nil && entry.bindGroup != nil {
+			entry.bindGroup.Release()
+		}
+	}
+	state.instancedBindCache = nil
 	if state.handleBgLayout != nil {
 		state.handleBgLayout.Release()
 	}

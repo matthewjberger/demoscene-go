@@ -106,6 +106,14 @@ func editorApp() *app.App {
 			if _, err := pass.AddSkinningComputePass(renderer, skinning); err != nil {
 				log.Fatal(err)
 			}
+			instanced, err := pass.NewInstancedCompute(renderer.Device)
+			if err != nil {
+				log.Fatal(err)
+			}
+			ecs.SetResource(world, pass.InstancedComputeResource{Compute: instanced})
+			if _, err := pass.AddInstancedComputePass(renderer, instanced); err != nil {
+				log.Fatal(err)
+			}
 			if _, err := pass.AddSkyPass(renderer); err != nil {
 				log.Fatal(err)
 			}
