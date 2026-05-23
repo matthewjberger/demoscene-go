@@ -79,7 +79,14 @@ type shadowDepthPassState struct {
 	cascadeBgs            [NumShadowCascades]*wgpu.BindGroup
 	skinnedPipeline       *wgpu.RenderPipeline
 	skinnedHandleBgLayout *wgpu.BindGroupLayout
-	skinnedJointBindCache map[*wgpu.Buffer]*wgpu.BindGroup
+	skinnedJointBindCache map[ecs.Entity]*shadowSkinnedEntry
+}
+
+type shadowSkinnedEntry struct {
+	offsetBuffer *wgpu.Buffer
+	bindGroup    *wgpu.BindGroup
+	jointGen     uint64
+	jointBuffer  *wgpu.Buffer
 }
 
 // NewShadow allocates the cascade depth texture (2D array, one
@@ -349,17 +356,24 @@ func NewShadowDepthPass(device *wgpu.Device, shadow *Shadow) (*render.Pass, erro
 
 	skinnedHandleBgLayout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
 		Label: "shadow per-handle skinned bind group layout",
-		Entries: []wgpu.BindGroupLayoutEntry{{
-			Binding:    0,
-			Visibility: wgpu.ShaderStageVertex,
-			Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage},
-		}},
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{
+				Binding:    0,
+				Visibility: wgpu.ShaderStageVertex,
+				Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage},
+			},
+			{
+				Binding:    1,
+				Visibility: wgpu.ShaderStageVertex,
+				Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeUniform},
+			},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("shadow_depth: skinned handle layout: %w", err)
 	}
 	state.skinnedHandleBgLayout = skinnedHandleBgLayout
-	state.skinnedJointBindCache = make(map[*wgpu.Buffer]*wgpu.BindGroup)
+	state.skinnedJointBindCache = make(map[ecs.Entity]*shadowSkinnedEntry)
 
 	skinnedShader, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
 		Label:          "skinned_shadow_depth shader",
@@ -646,8 +660,12 @@ func shadowDepthExecute(s any, context *render.PassContext) error {
 		// bind group is layout-compatible across both pipelines
 		// (same group 0). Each skinned entity binds its own
 		// joint matrix storage buffer at group 1.
-		if skinnedAssetsResource, ok := ecs.Resource[asset.SkinnedMeshAssetsResource](context.World); ok && skinnedAssetsResource != nil && skinnedAssetsResource.Assets != nil {
+		skinningRes, hasSkinning := ecs.Resource[SkinningComputeResource](context.World)
+		if skinnedAssetsResource, ok := ecs.Resource[asset.SkinnedMeshAssetsResource](context.World); ok && skinnedAssetsResource != nil && skinnedAssetsResource.Assets != nil && hasSkinning && skinningRes != nil && skinningRes.Compute != nil && skinningRes.Compute.JointMatrixBuffer() != nil {
 			skinnedAssets := skinnedAssetsResource.Assets
+			skinning := skinningRes.Compute
+			jointBuffer := skinning.JointMatrixBuffer()
+			generation := skinning.Generation()
 			skinnedMask := ecs.MustMaskOf[asset.SkinnedMesh](context.World)
 			pass.SetPipeline(state.skinnedPipeline)
 			pass.SetBindGroup(0, state.cascadeBgs[cascade], nil)
@@ -657,33 +675,51 @@ func shadowDepthExecute(s any, context *render.PassContext) error {
 					return
 				}
 				skinned, _ := ecs.Get[asset.SkinnedMesh](context.World, entity)
-				if skinned == nil || skinned.Skin == nil || skinned.Skin.JointMatrixBuffer == nil {
+				if skinned == nil || skinned.Skin == nil {
 					return
 				}
 				meshEntry, ok := skinnedAssets.Lookup(skinned.Mesh)
 				if !ok || meshEntry == nil {
 					return
 				}
-				bg, ok := state.skinnedJointBindCache[skinned.Skin.JointMatrixBuffer]
-				if !ok {
-					var err error
-					bg, err = context.Device.CreateBindGroup(&wgpu.BindGroupDescriptor{
-						Label:  "shadow skinned handle bg",
-						Layout: state.skinnedHandleBgLayout,
-						Entries: []wgpu.BindGroupEntry{{
-							Binding: 0,
-							Buffer:  skinned.Skin.JointMatrixBuffer,
-							Offset:  0,
-							Size:    wgpu.WholeSize,
-						}},
+				entry := state.skinnedJointBindCache[entity]
+				if entry == nil {
+					offsetBuf, err := context.Device.CreateBuffer(&wgpu.BufferDescriptor{
+						Label: "shadow skinned joint offset",
+						Size:  16,
+						Usage: wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
 					})
 					if err != nil {
 						skinnedErr = err
 						return
 					}
-					state.skinnedJointBindCache[skinned.Skin.JointMatrixBuffer] = bg
+					entry = &shadowSkinnedEntry{offsetBuffer: offsetBuf}
+					state.skinnedJointBindCache[entity] = entry
 				}
-				pass.SetBindGroup(1, bg, nil)
+				offset := [4]uint32{skinning.JointOffset(entity), 0, 0, 0}
+				writeBuffer(context.Device, context.Queue, context.Encoder, entry.offsetBuffer, 0, bytesOf(&offset))
+				if entry.bindGroup != nil && (entry.jointGen != generation || entry.jointBuffer != jointBuffer) {
+					entry.bindGroup.Release()
+					entry.bindGroup = nil
+				}
+				if entry.bindGroup == nil {
+					bg, err := context.Device.CreateBindGroup(&wgpu.BindGroupDescriptor{
+						Label:  "shadow skinned handle bg",
+						Layout: state.skinnedHandleBgLayout,
+						Entries: []wgpu.BindGroupEntry{
+							{Binding: 0, Buffer: jointBuffer, Offset: 0, Size: wgpu.WholeSize},
+							{Binding: 1, Buffer: entry.offsetBuffer, Offset: 0, Size: 16},
+						},
+					})
+					if err != nil {
+						skinnedErr = err
+						return
+					}
+					entry.bindGroup = bg
+					entry.jointGen = generation
+					entry.jointBuffer = jointBuffer
+				}
+				pass.SetBindGroup(1, entry.bindGroup, nil)
 				pass.SetVertexBuffer(0, meshEntry.Vertices, 0, wgpu.WholeSize)
 				pass.Draw(meshEntry.VertexCount, 1, 0, 0)
 			})
@@ -714,9 +750,15 @@ func shadowDepthRelease(s any) {
 	if state.skinnedPipeline != nil {
 		state.skinnedPipeline.Release()
 	}
-	for _, bg := range state.skinnedJointBindCache {
-		if bg != nil {
-			bg.Release()
+	for _, entry := range state.skinnedJointBindCache {
+		if entry == nil {
+			continue
+		}
+		if entry.bindGroup != nil {
+			entry.bindGroup.Release()
+		}
+		if entry.offsetBuffer != nil {
+			entry.offsetBuffer.Release()
 		}
 	}
 	state.skinnedJointBindCache = nil

@@ -66,7 +66,6 @@ func buildWorlds(renderer *render.Renderer) (app.Worlds, *app.App) {
 	worlds.EngineSchedule.Push("pan_orbit_camera", render.UpdatePanOrbitCamera)
 	worlds.EngineSchedule.Push("animations", asset.UpdateAnimationPlayers)
 	worlds.EngineSchedule.Push("transform_propagation", transform.UpdateGlobalTransforms)
-	worlds.EngineSchedule.Push("skin_bones", pass.UploadSkinBones)
 	worlds.EngineSchedule.Push("bounding_volume_lines", pass.UpdateBoundingVolumeLines)
 	worlds.EngineSchedule.Push("normal_lines", pass.UpdateNormalLines)
 	worlds.EngineSchedule.Push("skeleton_lines", pass.UpdateSkeletonLines)
@@ -103,6 +102,7 @@ func editorApp() *app.App {
 			if err != nil {
 				log.Fatal(err)
 			}
+			ecs.SetResource(world, pass.SkinningComputeResource{Compute: skinning})
 			if _, err := pass.AddSkinningComputePass(renderer, skinning); err != nil {
 				log.Fatal(err)
 			}

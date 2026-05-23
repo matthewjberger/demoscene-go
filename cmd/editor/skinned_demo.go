@@ -35,7 +35,7 @@ func spawnSkinnedDemo(worlds app.Worlds) {
 		log.Printf("skinned demo: register mesh: %v", err)
 		return
 	}
-	skin, err := asset.NewSkin(device, 2)
+	skin, err := asset.NewSkin(2)
 	if err != nil {
 		log.Printf("skinned demo: skin: %v", err)
 		return

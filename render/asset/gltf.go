@@ -465,7 +465,7 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene, device *wgpu.Device)
 			if len(spec.JointNodeIndices) == 0 {
 				continue
 			}
-			skin, err := NewSkin(device, len(spec.JointNodeIndices))
+			skin, err := NewSkin(len(spec.JointNodeIndices))
 			if err != nil {
 				continue
 			}

@@ -11,7 +11,15 @@ struct CascadeUniforms {
 
 @group(0) @binding(0) var<uniform> cascade: CascadeUniforms;
 
+struct JointOffset {
+    value: u32,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
+};
+
 @group(1) @binding(0) var<storage, read> joint_matrices: array<mat4x4<f32>>;
+@group(1) @binding(1) var<uniform>       joint_offset:   JointOffset;
 
 struct VertexInput {
     @location(0) position:      vec4<f32>,
@@ -35,7 +43,7 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
         let joint_weight = input.joint_weights[index];
         if (joint_weight > 0.0) {
             let joint_index = input.joint_indices[index];
-            let joint_matrix = joint_matrices[joint_index];
+            let joint_matrix = joint_matrices[joint_offset.value + joint_index];
             skinned_position = skinned_position + (joint_matrix * position).xyz * joint_weight;
         }
     }

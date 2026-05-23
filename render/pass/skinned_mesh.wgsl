@@ -30,8 +30,15 @@ struct SkinnedMaterial {
     _pad2:      u32,
 };
 
+struct PerEntity {
+    entity_id:    u32,
+    joint_offset: u32,
+    _pad0:        u32,
+    _pad1:        u32,
+};
+
 @group(2) @binding(0) var<storage, read> joint_matrices: array<mat4x4<f32>>;
-@group(2) @binding(1) var<storage, read> entity_ids:     array<u32>;
+@group(2) @binding(1) var<storage, read> per_entity:     array<PerEntity>;
 @group(2) @binding(2) var<uniform>       material:       SkinnedMaterial;
 
 struct VertexInput {
@@ -70,13 +77,14 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32)
     // plays nicer with non-affine joint matrices.
     let position = vec4<f32>(input.position.xyz, 1.0);
     let normal = input.normal.xyz;
+    let joint_offset = per_entity[instance_index].joint_offset;
     var skinned_position = vec3<f32>(0.0, 0.0, 0.0);
     var skinned_normal = vec3<f32>(0.0, 0.0, 0.0);
     for (var index = 0u; index < 4u; index = index + 1u) {
         let joint_index = input.joint_indices[index];
         let joint_weight = input.joint_weights[index];
         if (joint_weight > 0.0) {
-            let joint_matrix = joint_matrices[joint_index];
+            let joint_matrix = joint_matrices[joint_offset + joint_index];
             let transformed_pos = joint_matrix * position;
             skinned_position = skinned_position + transformed_pos.xyz * joint_weight;
             let normal_matrix = mat3x3<f32>(joint_matrix[0].xyz, joint_matrix[1].xyz, joint_matrix[2].xyz);
@@ -95,7 +103,7 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32)
     out.world_normal = skinned_normal;
     out.color = input.color;
     out.uv = input.uv.xy;
-    out.entity_id = entity_ids[instance_index];
+    out.entity_id = per_entity[instance_index].entity_id;
     return out;
 }
 

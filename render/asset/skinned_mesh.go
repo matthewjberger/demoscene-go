@@ -34,86 +34,30 @@ type SkinnedMeshVertex struct {
 // can't accidentally pull a skinned buffer.
 type SkinnedMeshHandle uint32
 
-// Skin owns the per-frame joint binding state for one skinned
-// mesh instance. Joints are engine entities whose GlobalTransform
-// matrices feed the bone-transforms input each frame; a compute
-// pass multiplies them by InverseBindMatrices to produce the
-// JointMatrixBuffer the vertex shader reads:
+// Skin is the static rig binding for one skinned mesh instance:
+// the joint entities whose GlobalTransform matrices drive the pose
+// and the per-joint inverse bind matrices. It owns no GPU buffers.
 //
-//	joint_matrix[i] = global(joints[i]) * inverse_bind[i]
-//
-// The CPU pushes the per-frame bone transforms; the GPU does the
-// mat4 multiply.
+// The skinning compute gathers every skin's joints into shared
+// engine-wide bone / inverse-bind / joint-matrix buffers and runs
+// one dispatch over all joints; the vertex shader indexes its
+// slice of the shared joint-matrix buffer via a per-entity joint
+// offset.
 type Skin struct {
-	Joints               []ecs.Entity
-	InverseBindMatrices  []mgl32.Mat4
-	BoneScratch          []mgl32.Mat4
-	BoneTransformsBuffer *wgpu.Buffer
-	InverseBindBuffer    *wgpu.Buffer
-	JointMatrixBuffer    *wgpu.Buffer
-	InverseBindUploaded  bool
+	Joints              []ecs.Entity
+	InverseBindMatrices []mgl32.Mat4
 }
 
-// NewSkin allocates the per-skin storage buffers sized for the
-// given joint count. Caller fills Joints + InverseBindMatrices,
-// then the first frame's compute dispatch uploads + computes
-// joint matrices.
-func NewSkin(device *wgpu.Device, jointCount int) (*Skin, error) {
+// NewSkin allocates a Skin sized for the given joint count. Caller
+// fills Joints + InverseBindMatrices before the first frame.
+func NewSkin(jointCount int) (*Skin, error) {
 	if jointCount <= 0 || jointCount > MaxJointsPerSkin {
 		return nil, fmt.Errorf("skin: joint count %d outside [1, %d]", jointCount, MaxJointsPerSkin)
 	}
-	size := uint64(jointCount) * uint64(unsafe.Sizeof(mgl32.Mat4{}))
-	bones, err := device.CreateBuffer(&wgpu.BufferDescriptor{
-		Label: "skin bone transforms",
-		Size:  size,
-		Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("skin: bones buffer: %w", err)
-	}
-	ibms, err := device.CreateBuffer(&wgpu.BufferDescriptor{
-		Label: "skin inverse bind matrices",
-		Size:  size,
-		Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
-	})
-	if err != nil {
-		bones.Release()
-		return nil, fmt.Errorf("skin: ibm buffer: %w", err)
-	}
-	out, err := device.CreateBuffer(&wgpu.BufferDescriptor{
-		Label: "skin joint matrices",
-		Size:  size,
-		Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
-	})
-	if err != nil {
-		bones.Release()
-		ibms.Release()
-		return nil, fmt.Errorf("skin: joint buffer: %w", err)
-	}
 	return &Skin{
-		Joints:               make([]ecs.Entity, jointCount),
-		InverseBindMatrices:  make([]mgl32.Mat4, jointCount),
-		BoneScratch:          make([]mgl32.Mat4, jointCount),
-		BoneTransformsBuffer: bones,
-		InverseBindBuffer:    ibms,
-		JointMatrixBuffer:    out,
+		Joints:              make([]ecs.Entity, jointCount),
+		InverseBindMatrices: make([]mgl32.Mat4, jointCount),
 	}, nil
-}
-
-// Release frees every per-skin storage buffer.
-func (s *Skin) Release() {
-	if s.JointMatrixBuffer != nil {
-		s.JointMatrixBuffer.Release()
-		s.JointMatrixBuffer = nil
-	}
-	if s.BoneTransformsBuffer != nil {
-		s.BoneTransformsBuffer.Release()
-		s.BoneTransformsBuffer = nil
-	}
-	if s.InverseBindBuffer != nil {
-		s.InverseBindBuffer.Release()
-		s.InverseBindBuffer = nil
-	}
 }
 
 type skinnedMeshEntry struct {
