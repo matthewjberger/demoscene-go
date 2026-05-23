@@ -41,12 +41,13 @@ func loadDefaultGltf(engine *ecs.World, renderer *render.Renderer) {
 // the editor's startup auto-load and the wasm drop callback.
 func loadGltfBytes(engine *ecs.World, renderer *render.Renderer, label string, data []byte) ([]ecs.Entity, error) {
 	assets := ecs.MustResource[asset.MeshAssetsResource](engine).Assets
+	skinnedAssets := ecs.MustResource[asset.SkinnedMeshAssetsResource](engine).Assets
 	arrays := ecs.MustResource[asset.MaterialTextureArraysResource](engine).Arrays
-	scene, err := asset.LoadGltfReader(renderer.Device, renderer.Queue, assets, arrays, label, bytes.NewReader(data))
+	scene, err := asset.LoadGltfReader(renderer.Device, renderer.Queue, assets, skinnedAssets, arrays, label, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
-	return spawnLoadedSceneNamed(engine, scene, label)
+	return spawnLoadedSceneNamed(engine, renderer, scene, label)
 }
 
 // loadGltfInto loads path via [asset.LoadGltfFile] and forwards to
@@ -54,16 +55,17 @@ func loadGltfBytes(engine *ecs.World, renderer *render.Renderer, label string, d
 // [loadGltfBytes] directly with bytes fetched from a drop event.
 func loadGltfInto(engine *ecs.World, renderer *render.Renderer, path string) ([]ecs.Entity, error) {
 	assets := ecs.MustResource[asset.MeshAssetsResource](engine).Assets
+	skinnedAssets := ecs.MustResource[asset.SkinnedMeshAssetsResource](engine).Assets
 	arrays := ecs.MustResource[asset.MaterialTextureArraysResource](engine).Arrays
-	scene, err := asset.LoadGltfFile(renderer.Device, renderer.Queue, assets, arrays, path)
+	scene, err := asset.LoadGltfFile(renderer.Device, renderer.Queue, assets, skinnedAssets, arrays, path)
 	if err != nil {
 		return nil, err
 	}
-	return spawnLoadedSceneNamed(engine, scene, filepath.Base(path))
+	return spawnLoadedSceneNamed(engine, renderer, scene, filepath.Base(path))
 }
 
-func spawnLoadedSceneNamed(engine *ecs.World, scene *asset.LoadedScene, label string) ([]ecs.Entity, error) {
-	entities := asset.SpawnLoadedScene(engine, scene)
+func spawnLoadedSceneNamed(engine *ecs.World, renderer *render.Renderer, scene *asset.LoadedScene, label string) ([]ecs.Entity, error) {
+	entities := asset.SpawnLoadedScene(engine, scene, renderer.Device)
 	baseName := strings.TrimSuffix(label, filepath.Ext(label))
 	nameMask := ecs.MustMaskOf[app.Name](engine)
 	for i, e := range entities {

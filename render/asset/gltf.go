@@ -37,6 +37,34 @@ type LoadedScene struct {
 	Meshes     []LoadedMesh
 	Materials  []Material
 	Animations []AnimationClip
+	// SkinSpecs[i] holds the joint node indices + inverse-bind
+	// matrices for glTF skin i. SpawnLoadedScene materializes each
+	// SkinSpec into an asset.Skin once joint entities exist.
+	SkinSpecs []SkinSpec
+	// skinnedPrimSpawned records the child entities
+	// SpawnLoadedScene creates for multi-primitive skinned mesh
+	// nodes so the per-skin resolution pass can attach SkinnedMesh
+	// components after the joint entities exist.
+	skinnedPrimSpawned []skinnedSpawnRecord
+}
+
+// SkinSpec describes one glTF skin without GPU resources: the
+// joint nodes' indices into LoadedScene.Nodes and the
+// inverse-bind matrices in joint order. Resolved into an
+// asset.Skin at spawn time.
+type SkinSpec struct {
+	JointNodeIndices    []int
+	InverseBindMatrices []mgl32.Mat4
+}
+
+// skinnedSpawnRecord tracks each multi-primitive skinned child
+// entity SpawnLoadedScene creates so the post-spawn skin-
+// resolution loop can attach SkinnedMesh components after the
+// asset.Skin instances exist.
+type skinnedSpawnRecord struct {
+	NodeIdx     int
+	SkinnedMesh SkinnedMeshHandle
+	Entity      ecs.Entity
 }
 
 // SceneNode is one glTF node: a TRS transform, optional mesh +
@@ -53,6 +81,23 @@ type SceneNode struct {
 	HasMesh         bool
 	Material        Material
 	ChildPrimitives []SceneNodePrimitive
+	// SkinIndex points into LoadedScene.SkinSpecs when this node
+	// has a glTF skin assigned; -1 otherwise. When >= 0, Mesh /
+	// ChildPrimitives are SkinnedMeshHandles rather than
+	// MeshHandles.
+	SkinIndex int
+	// SkinnedMesh holds the skinned counterpart of Mesh when
+	// SkinIndex >= 0 and the primitive carried JOINTS_0 attrs.
+	SkinnedMesh       SkinnedMeshHandle
+	HasSkinnedMesh    bool
+	ChildSkinnedPrims []SceneNodeSkinnedPrimitive
+}
+
+// SceneNodeSkinnedPrimitive is one rigged primitive of a
+// multi-primitive glTF mesh node.
+type SceneNodeSkinnedPrimitive struct {
+	Mesh     SkinnedMeshHandle
+	Material Material
 }
 
 // SceneNodePrimitive is one mesh primitive in a multi-primitive glTF
@@ -72,7 +117,7 @@ type LoadedMesh struct {
 // LoadGltfFile reads a glTF or glb file from disk and forwards to
 // [LoadGltfReader]. External-file image URIs are resolved relative
 // to the parent directory of path.
-func LoadGltfFile(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, arrays *MaterialTextureArrays, path string) (*LoadedScene, error) {
+func LoadGltfFile(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, skinnedAssets *SkinnedMeshAssets, arrays *MaterialTextureArrays, path string) (*LoadedScene, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("gltf %q: open: %w", path, err)
@@ -82,7 +127,7 @@ func LoadGltfFile(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, ar
 		Label:   filepath.Base(path),
 		BaseDir: filepath.Dir(path),
 	}
-	return LoadGltfReaderOpts(device, queue, assets, arrays, f, opts)
+	return LoadGltfReaderOpts(device, queue, assets, skinnedAssets, arrays, f, opts)
 }
 
 // LoadGltfOptions tweaks reader-side behavior. Label is the name
@@ -96,8 +141,8 @@ type LoadGltfOptions struct {
 
 // LoadGltfReader is the LoadGltfReaderOpts shortcut with default
 // options. Kept for callers that don't need a base dir.
-func LoadGltfReader(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, arrays *MaterialTextureArrays, label string, r io.Reader) (*LoadedScene, error) {
-	return LoadGltfReaderOpts(device, queue, assets, arrays, r, LoadGltfOptions{Label: label})
+func LoadGltfReader(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, skinnedAssets *SkinnedMeshAssets, arrays *MaterialTextureArrays, label string, r io.Reader) (*LoadedScene, error) {
+	return LoadGltfReaderOpts(device, queue, assets, skinnedAssets, arrays, r, LoadGltfOptions{Label: label})
 }
 
 // LoadGltfReaderOpts parses a glTF / glb document from r, uploads
@@ -105,7 +150,7 @@ func LoadGltfReader(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, 
 // captures animation data, and returns a LoadedScene that mirrors
 // the glTF node hierarchy. Caller can then [SpawnLoadedScene] to
 // materialize entities.
-func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, arrays *MaterialTextureArrays, r io.Reader, opts LoadGltfOptions) (*LoadedScene, error) {
+func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAssets, skinnedAssets *SkinnedMeshAssets, arrays *MaterialTextureArrays, r io.Reader, opts LoadGltfOptions) (*LoadedScene, error) {
 	label := opts.Label
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -137,17 +182,15 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 	scene.Materials = materials
 
 	type primitiveResult struct {
-		Handle   MeshHandle
-		Material Material
+		Handle        MeshHandle
+		SkinnedHandle SkinnedMeshHandle
+		Skinned       bool
+		Material      Material
 	}
 	meshPrimitives := make([][]primitiveResult, len(doc.Meshes))
 	for meshIdx, mesh := range doc.Meshes {
 		results := make([]primitiveResult, 0, len(mesh.Primitives))
 		for primIdx, prim := range mesh.Primitives {
-			vertices, err := buildGltfPrimitive(doc, prim)
-			if err != nil {
-				return nil, fmt.Errorf("gltf %q: mesh %d primitive %d: %w", label, meshIdx, primIdx, err)
-			}
 			name := mesh.Name
 			if name == "" {
 				name = fmt.Sprintf("%s/mesh_%d", label, meshIdx)
@@ -155,13 +198,29 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 			if len(mesh.Primitives) > 1 {
 				name = fmt.Sprintf("%s.%d", name, primIdx)
 			}
-			handle, err := assets.Register(device, name, vertices)
-			if err != nil {
-				return nil, err
-			}
 			material := DefaultMaterial()
 			if prim.Material != nil {
 				material = materials[*prim.Material]
+			}
+			if _, hasJoints := prim.Attributes["JOINTS_0"]; hasJoints && skinnedAssets != nil {
+				vertices, err := buildSkinnedGltfPrimitive(doc, prim)
+				if err != nil {
+					return nil, fmt.Errorf("gltf %q: mesh %d primitive %d (skinned): %w", label, meshIdx, primIdx, err)
+				}
+				handle, err := skinnedAssets.Register(device, name, vertices)
+				if err != nil {
+					return nil, err
+				}
+				results = append(results, primitiveResult{SkinnedHandle: handle, Skinned: true, Material: material})
+				continue
+			}
+			vertices, err := buildGltfPrimitive(doc, prim)
+			if err != nil {
+				return nil, fmt.Errorf("gltf %q: mesh %d primitive %d: %w", label, meshIdx, primIdx, err)
+			}
+			handle, err := assets.Register(device, name, vertices)
+			if err != nil {
+				return nil, err
 			}
 			results = append(results, primitiveResult{Handle: handle, Material: material})
 			scene.Meshes = append(scene.Meshes, LoadedMesh{Handle: handle, Name: name})
@@ -170,6 +229,11 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 	}
 
 	scene.Animations, err = readAnimations(doc)
+	if err != nil {
+		return nil, fmt.Errorf("gltf %q: %w", label, err)
+	}
+
+	scene.SkinSpecs, err = readSkins(doc)
 	if err != nil {
 		return nil, fmt.Errorf("gltf %q: %w", label, err)
 	}
@@ -183,19 +247,40 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 			Rotation:    rotation,
 			Scale:       scale,
 			Children:    childIndicesOf(node),
+			SkinIndex:   -1,
+		}
+		if node.Skin != nil {
+			out.SkinIndex = int(*node.Skin)
 		}
 		if node.Mesh != nil {
 			prims := meshPrimitives[*node.Mesh]
-			switch len(prims) {
-			case 0:
-			case 1:
+			// Pre-classify primitives so multi-primitive nodes
+			// route static and skinned variants down their
+			// respective slots.
+			staticPrims := make([]SceneNodePrimitive, 0, len(prims))
+			skinnedPrims := make([]SceneNodeSkinnedPrimitive, 0, len(prims))
+			for _, p := range prims {
+				if p.Skinned {
+					skinnedPrims = append(skinnedPrims, SceneNodeSkinnedPrimitive{Mesh: p.SkinnedHandle, Material: p.Material})
+				} else {
+					staticPrims = append(staticPrims, SceneNodePrimitive{Mesh: p.Handle, Material: p.Material})
+				}
+			}
+			switch {
+			case len(staticPrims) == 1 && len(skinnedPrims) == 0:
 				out.HasMesh = true
-				out.Mesh = prims[0].Handle
-				out.Material = prims[0].Material
+				out.Mesh = staticPrims[0].Mesh
+				out.Material = staticPrims[0].Material
+			case len(skinnedPrims) == 1 && len(staticPrims) == 0:
+				out.HasSkinnedMesh = true
+				out.SkinnedMesh = skinnedPrims[0].Mesh
+				out.Material = skinnedPrims[0].Material
 			default:
-				out.ChildPrimitives = make([]SceneNodePrimitive, len(prims))
-				for j, p := range prims {
-					out.ChildPrimitives[j] = SceneNodePrimitive{Mesh: p.Handle, Material: p.Material}
+				if len(staticPrims) > 0 {
+					out.ChildPrimitives = staticPrims
+				}
+				if len(skinnedPrims) > 0 {
+					out.ChildSkinnedPrims = skinnedPrims
 				}
 			}
 		}
@@ -234,7 +319,10 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 // world must have transform.LocalTransform, transform.Parent,
 // RenderMesh, and Material registered. The standard
 // [indigo/app.NewEngineWorld] does this.
-func SpawnLoadedScene(world *ecs.World, scene *LoadedScene) []ecs.Entity {
+// SpawnLoadedScene needs a *wgpu.Device to allocate per-skin
+// joint matrix storage buffers. Static-only scenes still work
+// when device is nil (the function skips skin materialization).
+func SpawnLoadedScene(world *ecs.World, scene *LoadedScene, device *wgpu.Device) []ecs.Entity {
 	entities := make([]ecs.Entity, len(scene.Nodes))
 	localMask := ecs.MustMaskOf[transform.LocalTransform](world)
 	globalMask := ecs.MustMaskOf[transform.GlobalTransform](world)
@@ -242,6 +330,7 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene) []ecs.Entity {
 	parentMask := ecs.MustMaskOf[transform.Parent](world)
 	groupRootMask := ecs.MustMaskOf[transform.GroupRoot](world)
 	meshMask := ecs.MustMaskOf[RenderMesh](world)
+	skinnedMeshMask := ecs.MustMaskOf[SkinnedMesh](world)
 	materialMask := ecs.MustMaskOf[Material](world)
 
 	transformMask := localMask | globalMask | dirtyMask
@@ -282,6 +371,10 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene) []ecs.Entity {
 			ecs.Set(world, entity, RenderMesh{Mesh: node.Mesh})
 			ecs.Set(world, entity, node.Material)
 		}
+		if node.HasSkinnedMesh {
+			world.AddComponents(entity, skinnedMeshMask|materialMask)
+			ecs.Set(world, entity, node.Material)
+		}
 		for _, child := range node.Children {
 			world.AddComponents(entities[child], parentMask)
 			ecs.Set(world, entities[child], transform.Parent{Entity: entity})
@@ -294,6 +387,68 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene) []ecs.Entity {
 			ecs.Set(world, child, RenderMesh{Mesh: prim.Mesh})
 			ecs.Set(world, child, prim.Material)
 		}
+		for _, prim := range node.ChildSkinnedPrims {
+			child := world.Spawn(transformMask | parentMask | skinnedMeshMask | materialMask)
+			ecs.Set(world, child, transform.IdentityLocalTransform())
+			ecs.Set(world, child, transform.IdentityGlobalTransform())
+			ecs.Set(world, child, transform.Parent{Entity: entity})
+			ecs.Set(world, child, prim.Material)
+			scene.skinnedPrimSpawned = append(scene.skinnedPrimSpawned, skinnedSpawnRecord{
+				NodeIdx:     i,
+				SkinnedMesh: prim.Mesh,
+				Entity:      child,
+			})
+		}
+	}
+
+	// Materialize each glTF skin into an asset.Skin, then write the
+	// SkinnedMesh component on every entity that referenced that
+	// skin (both single-primitive nodes and multi-primitive
+	// children). joint matrix uploads happen each frame via
+	// PrepareSkinMatrices.
+	skinResources := make([]*Skin, len(scene.SkinSpecs))
+	if device != nil {
+		for skinIdx, spec := range scene.SkinSpecs {
+			if len(spec.JointNodeIndices) == 0 {
+				continue
+			}
+			skin, err := NewSkin(device, len(spec.JointNodeIndices))
+			if err != nil {
+				continue
+			}
+			for jointIdx, nodeIdx := range spec.JointNodeIndices {
+				if nodeIdx >= 0 && nodeIdx < len(entities) {
+					skin.Joints[jointIdx] = entities[nodeIdx]
+				}
+			}
+			if len(spec.InverseBindMatrices) == len(skin.InverseBindMatrices) {
+				copy(skin.InverseBindMatrices, spec.InverseBindMatrices)
+			}
+			skinResources[skinIdx] = skin
+		}
+	}
+	for i, node := range scene.Nodes {
+		if node.SkinIndex < 0 || node.SkinIndex >= len(skinResources) {
+			continue
+		}
+		skin := skinResources[node.SkinIndex]
+		if skin == nil {
+			continue
+		}
+		if node.HasSkinnedMesh {
+			ecs.Set(world, entities[i], SkinnedMesh{Mesh: node.SkinnedMesh, Skin: skin})
+		}
+	}
+	for _, record := range scene.skinnedPrimSpawned {
+		node := scene.Nodes[record.NodeIdx]
+		if node.SkinIndex < 0 || node.SkinIndex >= len(skinResources) {
+			continue
+		}
+		skin := skinResources[node.SkinIndex]
+		if skin == nil {
+			continue
+		}
+		ecs.Set(world, record.Entity, SkinnedMesh{Mesh: record.SkinnedMesh, Skin: skin})
 	}
 
 	// The loader sets transform.Parent directly via ecs.Set above,
@@ -637,6 +792,176 @@ func buildGltfPrimitive(doc *gltf.Document, prim *gltf.Primitive) ([]MeshVertex,
 		expanded = append(expanded, v)
 	}
 	return expanded, nil
+}
+
+// buildSkinnedGltfPrimitive mirrors buildGltfPrimitive but also
+// reads JOINTS_0 + WEIGHTS_0 and packs them into the per-vertex
+// SkinnedMeshVertex layout the skinned mesh pass expects.
+func buildSkinnedGltfPrimitive(doc *gltf.Document, prim *gltf.Primitive) ([]SkinnedMeshVertex, error) {
+	posAttr, ok := prim.Attributes["POSITION"]
+	if !ok {
+		return nil, fmt.Errorf("primitive missing POSITION attribute")
+	}
+	positions, err := modeler.ReadPosition(doc, doc.Accessors[posAttr], nil)
+	if err != nil {
+		return nil, fmt.Errorf("read position: %w", err)
+	}
+
+	var normals [][3]float32
+	if idx, ok := prim.Attributes["NORMAL"]; ok {
+		normals, err = modeler.ReadNormal(doc, doc.Accessors[idx], nil)
+		if err != nil {
+			return nil, fmt.Errorf("read normal: %w", err)
+		}
+	}
+	var tangents [][4]float32
+	if idx, ok := prim.Attributes["TANGENT"]; ok {
+		tangents, err = modeler.ReadTangent(doc, doc.Accessors[idx], nil)
+		if err != nil {
+			return nil, fmt.Errorf("read tangent: %w", err)
+		}
+	}
+	var uvs [][2]float32
+	if idx, ok := prim.Attributes["TEXCOORD_0"]; ok {
+		uvs, err = modeler.ReadTextureCoord(doc, doc.Accessors[idx], nil)
+		if err != nil {
+			return nil, fmt.Errorf("read texcoord_0: %w", err)
+		}
+	}
+	var uvs1 [][2]float32
+	if idx, ok := prim.Attributes["TEXCOORD_1"]; ok {
+		uvs1, err = modeler.ReadTextureCoord(doc, doc.Accessors[idx], nil)
+		if err != nil {
+			return nil, fmt.Errorf("read texcoord_1: %w", err)
+		}
+	}
+	var colors [][4]uint8
+	if idx, ok := prim.Attributes["COLOR_0"]; ok {
+		colors, err = modeler.ReadColor(doc, doc.Accessors[idx], nil)
+		if err != nil {
+			return nil, fmt.Errorf("read color: %w", err)
+		}
+	}
+
+	jointAccessor, hasJoints := prim.Attributes["JOINTS_0"]
+	if !hasJoints {
+		return nil, fmt.Errorf("primitive missing JOINTS_0 attribute")
+	}
+	jointsRaw, err := modeler.ReadJoints(doc, doc.Accessors[jointAccessor], nil)
+	if err != nil {
+		return nil, fmt.Errorf("read joints_0: %w", err)
+	}
+
+	weightAccessor, hasWeights := prim.Attributes["WEIGHTS_0"]
+	if !hasWeights {
+		return nil, fmt.Errorf("primitive missing WEIGHTS_0 attribute")
+	}
+	weightsRaw, err := modeler.ReadWeights(doc, doc.Accessors[weightAccessor], nil)
+	if err != nil {
+		return nil, fmt.Errorf("read weights_0: %w", err)
+	}
+
+	indices, err := readIndices(doc, prim)
+	if err != nil {
+		return nil, err
+	}
+
+	expanded := make([]SkinnedMeshVertex, 0, len(indices))
+	for _, srcIdx := range indices {
+		v := SkinnedMeshVertex{
+			Position: [4]float32{positions[srcIdx][0], positions[srcIdx][1], positions[srcIdx][2], 1},
+			Normal:   defaultNormalZ,
+			Tangent:  defaultTangent,
+			Color:    [4]float32{1, 1, 1, 1},
+		}
+		if int(srcIdx) < len(normals) {
+			v.Normal = [4]float32{normals[srcIdx][0], normals[srcIdx][1], normals[srcIdx][2], 0}
+		}
+		if int(srcIdx) < len(tangents) {
+			v.Tangent = tangents[srcIdx]
+		}
+		var u0x, u0y, u1x, u1y float32
+		if int(srcIdx) < len(uvs) {
+			u0x = uvs[srcIdx][0]
+			u0y = uvs[srcIdx][1]
+		}
+		if int(srcIdx) < len(uvs1) {
+			u1x = uvs1[srcIdx][0]
+			u1y = uvs1[srcIdx][1]
+		}
+		v.UV = [4]float32{u0x, u0y, u1x, u1y}
+		if int(srcIdx) < len(colors) {
+			c := colors[srcIdx]
+			v.Color = [4]float32{float32(c[0]) / 255, float32(c[1]) / 255, float32(c[2]) / 255, float32(c[3]) / 255}
+		}
+		if int(srcIdx) < len(jointsRaw) {
+			j := jointsRaw[srcIdx]
+			v.JointIndices = [4]uint32{uint32(j[0]), uint32(j[1]), uint32(j[2]), uint32(j[3])}
+		}
+		if int(srcIdx) < len(weightsRaw) {
+			w := weightsRaw[srcIdx]
+			sum := w[0] + w[1] + w[2] + w[3]
+			if sum > 0 {
+				inv := 1.0 / sum
+				v.JointWeights = [4]float32{w[0] * inv, w[1] * inv, w[2] * inv, w[3] * inv}
+			} else {
+				v.JointWeights = [4]float32{1, 0, 0, 0}
+			}
+		} else {
+			v.JointWeights = [4]float32{1, 0, 0, 0}
+		}
+		expanded = append(expanded, v)
+	}
+	return expanded, nil
+}
+
+// readSkins extracts every glTF skin's joint node indices and
+// inverse-bind matrices. The matrices are stored column-major in
+// the glTF accessor; mgl32.Mat4 also stores column-major so the
+// raw bytes copy across unchanged.
+func readSkins(doc *gltf.Document) ([]SkinSpec, error) {
+	if len(doc.Skins) == 0 {
+		return nil, nil
+	}
+	specs := make([]SkinSpec, len(doc.Skins))
+	for skinIdx, skin := range doc.Skins {
+		spec := SkinSpec{
+			JointNodeIndices: make([]int, len(skin.Joints)),
+		}
+		for j, jointNodeIdx := range skin.Joints {
+			spec.JointNodeIndices[j] = int(jointNodeIdx)
+		}
+		if skin.InverseBindMatrices != nil {
+			accessor := doc.Accessors[*skin.InverseBindMatrices]
+			matrices, err := modeler.ReadAccessor(doc, accessor, nil)
+			if err != nil {
+				return nil, fmt.Errorf("skin %d: read inverse bind matrices: %w", skinIdx, err)
+			}
+			mats, ok := matrices.([][4][4]float32)
+			if !ok {
+				return nil, fmt.Errorf("skin %d: unexpected inverse-bind matrix type %T", skinIdx, matrices)
+			}
+			spec.InverseBindMatrices = make([]mgl32.Mat4, len(mats))
+			for k, m := range mats {
+				// glTF stores column-major in flat layout; the
+				// modeler decodes into [4][4] which mgl32.Mat4 also
+				// reads as column-major when copied via index.
+				spec.InverseBindMatrices[k] = mgl32.Mat4{
+					m[0][0], m[0][1], m[0][2], m[0][3],
+					m[1][0], m[1][1], m[1][2], m[1][3],
+					m[2][0], m[2][1], m[2][2], m[2][3],
+					m[3][0], m[3][1], m[3][2], m[3][3],
+				}
+			}
+		} else {
+			spec.InverseBindMatrices = make([]mgl32.Mat4, len(spec.JointNodeIndices))
+			for k := range spec.InverseBindMatrices {
+				spec.InverseBindMatrices[k] = mgl32.Ident4()
+			}
+		}
+		specs[skinIdx] = spec
+	}
+	return specs, nil
 }
 
 func readIndices(doc *gltf.Document, prim *gltf.Primitive) ([]uint32, error) {

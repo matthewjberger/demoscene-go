@@ -35,8 +35,9 @@ type LoadGltfBytes struct {
 // drop doesn't take down the editor.
 func (c LoadGltfBytes) Apply(world *ecs.World, renderer *render.Renderer) {
 	assets := ecs.MustResource[MeshAssetsResource](world).Assets
+	skinnedAssets := ecs.MustResource[SkinnedMeshAssetsResource](world).Assets
 	arrays := ecs.MustResource[MaterialTextureArraysResource](world).Arrays
-	scene, err := LoadGltfReader(renderer.Device, renderer.Queue, assets, arrays, c.Label, bytes.NewReader(c.Bytes))
+	scene, err := LoadGltfReader(renderer.Device, renderer.Queue, assets, skinnedAssets, arrays, c.Label, bytes.NewReader(c.Bytes))
 	if err != nil {
 		log.Printf("load_gltf_bytes: %s: %v", c.Label, err)
 		return
