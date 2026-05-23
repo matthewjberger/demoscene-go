@@ -60,7 +60,7 @@ func AddOitMeshPass(renderer *render.Renderer) (*render.Pass, error) {
 	pass := &render.Pass{
 		Name:                 "oit_mesh",
 		Reads:                []string{"depth"},
-		Writes:               []string{"oit_accum", "oit_reveal"},
+		Writes:               []string{"oit_accum", "oit_reveal", "entity_id"},
 		State:                state,
 		Prepare:              oitMeshPrepare,
 		Execute:              oitMeshExecute,
@@ -70,6 +70,7 @@ func AddOitMeshPass(renderer *render.Renderer) (*render.Pass, error) {
 	if err := renderer.Graph.AddPass(pass, []render.SlotBinding{
 		{Slot: "oit_accum", ResourceID: renderer.OitAccumID},
 		{Slot: "oit_reveal", ResourceID: renderer.OitRevealID},
+		{Slot: "entity_id", ResourceID: renderer.EntityIdID},
 		{Slot: "depth", ResourceID: renderer.DepthID},
 	}); err != nil {
 		return nil, err
@@ -181,6 +182,11 @@ func newOitMeshState(device *wgpu.Device, aspect func() float32) (*oitMeshPassSt
 			Targets: []wgpu.ColorTargetState{
 				{Format: render.HdrFormat, Blend: &accumBlend, WriteMask: wgpu.ColorWriteMaskAll},
 				{Format: wgpu.TextureFormatR8Unorm, Blend: &revealBlend, WriteMask: wgpu.ColorWriteMaskRed},
+				// entity_id: no blend, red-only write. Last
+				// drawn transparent fragment wins per-pixel,
+				// matching the reference engine's picking
+				// behavior for blended geometry.
+				{Format: render.EntityIdFormat, WriteMask: wgpu.ColorWriteMaskRed},
 			},
 		},
 	})
@@ -318,6 +324,15 @@ func oitMeshExecute(s any, context *render.PassContext) error {
 	if err != nil {
 		return err
 	}
+	entityID, err := context.ColorAttachment("entity_id")
+	if err != nil {
+		return err
+	}
+	// The static mesh pass already wrote opaque entity IDs into
+	// this attachment. Load them so unblended transparent writes
+	// don't clobber opaque fragments where no transparent
+	// fragment lands.
+	entityID.LoadOp = wgpu.LoadOpLoad
 	depth, err := context.DepthAttachment("depth")
 	if err != nil {
 		return err
@@ -332,7 +347,7 @@ func oitMeshExecute(s any, context *render.PassContext) error {
 
 	passEnc := context.Encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
 		Label:                  "oit_mesh",
-		ColorAttachments:       []wgpu.RenderPassColorAttachment{accum, reveal},
+		ColorAttachments:       []wgpu.RenderPassColorAttachment{accum, reveal, entityID},
 		DepthStencilAttachment: &depth,
 	})
 	passEnc.SetPipeline(state.pipeline)

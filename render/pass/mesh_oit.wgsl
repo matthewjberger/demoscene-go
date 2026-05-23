@@ -81,8 +81,9 @@ struct VertexOutput {
 };
 
 struct OitOutput {
-    @location(0) accum:  vec4<f32>,
-    @location(1) reveal: f32,
+    @location(0) accum:     vec4<f32>,
+    @location(1) reveal:    f32,
+    @location(2) entity_id: u32,
 };
 
 const NO_TEXTURE_LAYER: u32 = 0xFFFFFFFFu;
@@ -160,5 +161,6 @@ fn fragment_main(in: VertexOutput) -> OitOutput {
     var out: OitOutput;
     out.accum = vec4<f32>(albedo * alpha, alpha) * w;
     out.reveal = alpha;
+    out.entity_id = in.entity_id;
     return out;
 }
