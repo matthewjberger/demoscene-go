@@ -254,19 +254,19 @@ func handleMenuItem(worlds app.Worlds, hud *HudHandles, entity ecs.Entity) bool 
 			controller.TargetRadius = defaults.TargetRadius
 			controller.TargetFocus = defaults.TargetFocus
 		case 1:
-			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
+			settings := ecs.MustResource[render.Graphics](worlds.Engine)
 			settings.ShowGrid = !settings.ShowGrid
 		case 2:
-			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
+			settings := ecs.MustResource[render.Graphics](worlds.Engine)
 			settings.ShowSky = !settings.ShowSky
 		case 3:
-			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
+			settings := ecs.MustResource[render.Graphics](worlds.Engine)
 			settings.ShowBounds = !settings.ShowBounds
 		case 4:
-			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
+			settings := ecs.MustResource[render.Graphics](worlds.Engine)
 			settings.ShowNormals = !settings.ShowNormals
 		case 5:
-			settings := ecs.MustResource[render.GraphicsSettings](worlds.Engine)
+			settings := ecs.MustResource[render.Graphics](worlds.Engine)
 			settings.ShowSkeletons = !settings.ShowSkeletons
 		}
 		return true

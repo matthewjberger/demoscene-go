@@ -189,7 +189,7 @@ func gridPrepare(s any, context *render.PassContext) error {
 
 func gridExecute(s any, context *render.PassContext) error {
 	state := s.(*gridPassState)
-	settings := ecs.MustResource[render.GraphicsSettings](context.World)
+	settings := ecs.MustResource[render.Graphics](context.World)
 	if !settings.ShowGrid {
 		return nil
 	}

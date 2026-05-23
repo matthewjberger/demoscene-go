@@ -170,7 +170,7 @@ func skyPrepare(s any, context *render.PassContext) error {
 
 func skyExecute(s any, context *render.PassContext) error {
 	state := s.(*skyPassState)
-	settings := ecs.MustResource[render.GraphicsSettings](context.World)
+	settings := ecs.MustResource[render.Graphics](context.World)
 
 	colorAttachment, err := context.ColorAttachment("color")
 	if err != nil {

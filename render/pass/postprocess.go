@@ -234,14 +234,14 @@ func NewPostProcessPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, b
 func postprocessPrepare(s any, context *render.PassContext) error {
 	state := s.(*postprocessPassState)
 
-	settings := render.DefaultPostProcessSettings()
-	if resource, ok := ecs.Resource[render.PostProcessSettings](context.World); ok {
+	settings := render.DefaultGraphics()
+	if resource, ok := ecs.Resource[render.Graphics](context.World); ok {
 		settings = *resource
 	}
 
 	bloomView := state.dummyView
 	bloomEnabled := float32(0.0)
-	if settings.BloomEnabled && state.bloom != nil {
+	if settings.Bloom.Enabled && state.bloom != nil {
 		if view := BloomMipView(state.bloom); view != nil {
 			bloomView = view
 			bloomEnabled = 1.0
@@ -270,7 +270,7 @@ func postprocessPrepare(s any, context *render.PassContext) error {
 
 	uniform := postprocessUniform{
 		Exposure:             settings.Exposure,
-		BloomIntensity:       settings.BloomIntensity,
+		BloomIntensity:       settings.Bloom.Intensity,
 		BloomEnabled:         bloomEnabled,
 		SsaoEnabled:          ssaoEnabled,
 		AutoExposureEnabled:  autoExposureEnabled,

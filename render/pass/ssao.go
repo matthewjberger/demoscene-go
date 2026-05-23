@@ -62,29 +62,6 @@ type ssaoPassState struct {
 	aspectFn      func() float32
 }
 
-// SsaoSettings drives the SSAO pass each frame. Stored as an ECS
-// resource so any system or future editor UI can tune it without
-// touching pass internals.
-type SsaoSettings struct {
-	Enabled     bool
-	Radius      float32
-	Bias        float32
-	Intensity   float32
-	SampleCount int
-}
-
-// DefaultSsaoSettings matches the reference engine's defaults: a
-// fairly tight radius with a moderate sample count.
-func DefaultSsaoSettings() SsaoSettings {
-	return SsaoSettings{
-		Enabled:     true,
-		Radius:      0.5,
-		Bias:        0.025,
-		Intensity:   1.5,
-		SampleCount: 32,
-	}
-}
-
 // SsaoResult exposes the blurred occlusion texture so postprocess
 // can sample it.
 type SsaoResult struct {
@@ -299,9 +276,9 @@ func ssaoPrepare(s any, context *render.PassContext) error {
 		state.bindGroup = nil
 	}
 
-	settings := DefaultSsaoSettings()
-	if resource, ok := ecs.Resource[SsaoSettings](context.World); ok {
-		settings = *resource
+	settings := render.DefaultGraphics().Ssao
+	if g, ok := ecs.Resource[render.Graphics](context.World); ok && g != nil {
+		settings = g.Ssao
 	}
 
 	enabled := float32(0)

@@ -165,9 +165,9 @@ func meshPrepare(s any, context *render.PassContext) error {
 			screenH = float32(win.Viewport.Height)
 		}
 	}
-	cullSettings := DefaultCullSettings()
-	if cfg, ok := ecs.Resource[CullSettings](context.World); ok && cfg != nil {
-		cullSettings = *cfg
+	cullSettings := render.DefaultGraphics().Cull
+	if g, ok := ecs.Resource[render.Graphics](context.World); ok && g != nil {
+		cullSettings = g.Cull
 	}
 	enabled := uint32(0)
 	if cullSettings.Enabled {
@@ -229,19 +229,6 @@ func meshPrepare(s any, context *render.PassContext) error {
 
 	dispatchCullPasses(state, context)
 	return nil
-}
-
-// CullSettings is the editor-tunable cull resource. Disabled
-// returns every instance from the cull compute; the frustum and
-// min-pixel tests no-op.
-type CullSettings struct {
-	Enabled            bool
-	MinScreenPixelSize float32
-}
-
-// DefaultCullSettings enables culling with a 1-pixel cutoff.
-func DefaultCullSettings() CullSettings {
-	return CullSettings{Enabled: true, MinScreenPixelSize: 1.0}
 }
 
 // ensureCullBindings lazily creates the per-bucket uniform +

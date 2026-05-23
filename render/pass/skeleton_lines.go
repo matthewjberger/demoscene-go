@@ -9,7 +9,7 @@ import (
 
 // UpdateSkeletonLines emits a 3-axis cross at every joint origin
 // and a bone segment from each joint to its parent joint when
-// [render.GraphicsSettings.ShowSkeletons] is on. Walks every Skin
+// [render.Graphics.ShowSkeletons] is on. Walks every Skin
 // the renderer can see, reads each joint's GlobalTransform, pushes
 // segments into the [Lines] resource. Mirrors the reference
 // engine's skeleton_debug overlay.
@@ -17,7 +17,7 @@ import (
 // Place this in the engine schedule AFTER transform_propagation so
 // the joint world matrices are current.
 func UpdateSkeletonLines(world *ecs.World) {
-	settings, ok := ecs.Resource[render.GraphicsSettings](world)
+	settings, ok := ecs.Resource[render.Graphics](world)
 	if !ok || settings == nil || !settings.ShowSkeletons {
 		return
 	}
@@ -27,15 +27,15 @@ func UpdateSkeletonLines(world *ecs.World) {
 	}
 	lines := linesRes.Lines
 
-	jointSize := settings.SkeletonJointSize
+	jointSize := settings.Lines.SkeletonJointSize
 	if jointSize <= 0 {
 		jointSize = 0.04
 	}
-	jointColor := settings.SkeletonJointColor
+	jointColor := settings.Lines.SkeletonJointColor
 	if jointColor[3] == 0 {
 		jointColor = [4]float32{0.4, 1.0, 0.4, 1.0}
 	}
-	boneColor := settings.SkeletonBoneColor
+	boneColor := settings.Lines.SkeletonBoneColor
 	if boneColor[3] == 0 {
 		boneColor = [4]float32{1.0, 0.85, 0.2, 1.0}
 	}

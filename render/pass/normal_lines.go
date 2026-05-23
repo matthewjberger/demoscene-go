@@ -10,10 +10,10 @@ import (
 )
 
 // UpdateNormalLines emits one world-space line per vertex of every
-// drawn mesh when [render.GraphicsSettings.ShowNormals] is true.
+// drawn mesh when [render.Graphics.ShowNormals] is true.
 // Each line starts at the vertex's world position and points along
 // the vertex's world-space normal for
-// [render.GraphicsSettings.NormalLineLength] units.
+// [render.Graphics.NormalLineLength] units.
 //
 // The world normal uses the upper-3x3 of the model matrix as the
 // normal matrix. That's accurate for uniform scale; non-uniform
@@ -25,7 +25,7 @@ import (
 // draw. Frame-by-frame regeneration is fine for an interactive
 // debug overlay; cost scales with total visible vertex count.
 func UpdateNormalLines(world *ecs.World) {
-	settings, ok := ecs.Resource[render.GraphicsSettings](world)
+	settings, ok := ecs.Resource[render.Graphics](world)
 	if !ok || !settings.ShowNormals {
 		return
 	}
@@ -39,11 +39,11 @@ func UpdateNormalLines(world *ecs.World) {
 	}
 	assets := assetsRes.Assets
 	lines := linesRes.Lines
-	length := settings.NormalLineLength
+	length := settings.Lines.NormalLength
 	if length <= 0 {
 		length = 0.05
 	}
-	color := settings.NormalLineColor
+	color := settings.Lines.NormalColor
 
 	meshMask := ecs.MustMaskOf[asset.RenderMesh](world)
 	world.ForEach(meshMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
