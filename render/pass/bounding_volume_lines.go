@@ -29,20 +29,17 @@ func UpdateBoundingVolumeLines(world *ecs.World) {
 	lines := linesRes.Lines
 
 	color := [4]float32{0.4, 0.95, 0.55, 0.9}
-	meshMask := ecs.MustMaskOf[asset.RenderMesh](world)
-	world.ForEach(meshMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
-		mesh, ok := ecs.Get[asset.RenderMesh](world, entity)
-		if !ok {
+	mask := ecs.MustMaskOf[asset.RenderMesh](world) | ecs.MustMaskOf[transform.GlobalTransform](world)
+	world.ForEach(mask, 0, func(_ ecs.Entity, table *ecs.Archetype, index int) {
+		meshes, _ := ecs.Column[asset.RenderMesh](world, table)
+		globals, _ := ecs.Column[transform.GlobalTransform](world, table)
+		if meshes == nil || globals == nil {
 			return
 		}
-		global, ok := ecs.Get[transform.GlobalTransform](world, entity)
-		if !ok {
-			return
-		}
-		bounds := assets.Bounds(mesh.Mesh)
+		bounds := assets.Bounds(meshes[index].Mesh)
 		if bounds == (asset.BoundingVolume{}) {
 			return
 		}
-		lines.AddBox(bounds, &global.Matrix, color)
+		lines.AddBox(bounds, &globals[index].Matrix, color)
 	})
 }
