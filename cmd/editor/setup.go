@@ -87,99 +87,73 @@ func editorApp() *app.App {
 				log.Fatal(err)
 			}
 			ecs.SetResource(world, pass.SkinningComputeResource{Compute: skinning})
-			if _, err := pass.AddSkinningComputePass(renderer, skinning); err != nil {
-				log.Fatal(err)
-			}
 			instanced, err := pass.NewInstancedCompute(renderer.Device)
 			if err != nil {
 				log.Fatal(err)
 			}
 			ecs.SetResource(world, pass.InstancedComputeResource{Compute: instanced})
-			if _, err := pass.AddInstancedComputePass(renderer, instanced); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddSkyPass(renderer); err != nil {
-				log.Fatal(err)
-			}
+
 			arrays := ecs.MustResource[asset.MaterialTextureArraysResource](world).Arrays
 			registry := ecs.MustResource[asset.MaterialRegistryResource](world).Registry
 			ibl := ecs.MustResource[pass.IBLResource](world).IBL
 			shadow := ecs.MustResource[pass.ShadowResource](world).Shadow
 			spotShadow := ecs.MustResource[pass.SpotShadowResource](world).Shadow
 			pointShadow := ecs.MustResource[pass.PointShadowResource](world).Shadow
-			if _, err := pass.AddShadowDepthPass(renderer, shadow); err != nil {
-				log.Fatal(err)
+
+			var bloomMipView func() *wgpu.TextureView
+			var fxaaOutputID render.ResourceID
+
+			// Passes declare their own read/write dependencies, so the graph
+			// schedules them by topology at compile time; this list only needs
+			// to register them, ordered so data-dependency outputs (bloom mip
+			// view, fxaa output) are produced before their consumers capture them.
+			steps := []struct {
+				name string
+				add  func() error
+			}{
+				{"skinning_compute", func() error { _, err := pass.AddSkinningComputePass(renderer, skinning); return err }},
+				{"instanced_compute", func() error { _, err := pass.AddInstancedComputePass(renderer, instanced); return err }},
+				{"sky", func() error { _, err := pass.AddSkyPass(renderer); return err }},
+				{"shadow_depth", func() error { _, err := pass.AddShadowDepthPass(renderer, shadow); return err }},
+				{"spot_shadow", func() error { _, err := pass.AddSpotShadowPass(renderer, spotShadow); return err }},
+				{"point_shadow", func() error { _, err := pass.AddPointShadowPass(renderer, pointShadow); return err }},
+				{"mesh", func() error {
+					_, err := pass.AddMeshPass(renderer, arrays, registry, ibl, shadow, spotShadow, pointShadow)
+					return err
+				}},
+				{"skinned_mesh", func() error { _, err := pass.AddSkinnedMeshPass(renderer); return err }},
+				{"instanced_mesh", func() error { _, err := pass.AddInstancedMeshPass(renderer); return err }},
+				{"pick_proxy", func() error { _, err := pass.AddPickProxyPass(renderer); return err }},
+				{"picking", func() error { _, err := pass.AddPickingPass(renderer); return err }},
+				{"selection_mask", func() error { _, err := pass.AddSelectionMaskPass(renderer); return err }},
+				{"grid", func() error { _, err := pass.AddGridPass(renderer); return err }},
+				{"lines", func() error { _, err := pass.AddLinesPass(renderer); return err }},
+				{"outline", func() error { _, err := pass.AddOutlinePass(renderer); return err }},
+				{"ssao", func() error { _, _, err := pass.AddSsaoPass(renderer, renderer.AspectRatio); return err }},
+				{"oit_mesh", func() error { _, err := pass.AddOitMeshPass(renderer); return err }},
+				{"skinned_mesh_oit", func() error { _, err := pass.AddSkinnedMeshOitPass(renderer); return err }},
+				{"oit_composite", func() error { _, err := pass.AddOitCompositePass(renderer); return err }},
+				{"auto_exposure", func() error { _, err := pass.AddAutoExposurePass(renderer); return err }},
+				{"bloom", func() error {
+					var err error
+					_, bloomMipView, err = pass.AddBloomPass(renderer)
+					return err
+				}},
+				{"postprocess", func() error { _, err := pass.AddPostProcessPass(renderer, bloomMipView); return err }},
+				{"fxaa", func() error {
+					var err error
+					_, fxaaOutputID, err = pass.AddFxaaPass(renderer)
+					return err
+				}},
+				{"gizmo", func() error { _, err := pass.AddGizmoPass(renderer, fxaaOutputID); return err }},
+				{"ui_quad", func() error { _, err := pass.AddUiQuadPass(renderer, fxaaOutputID); return err }},
+				{"ui_text", func() error { _, err := pass.AddUiTextPass(renderer, fxaaOutputID); return err }},
+				{"present", func() error { _, err := pass.AddPresentPass(renderer, fxaaOutputID); return err }},
 			}
-			if _, err := pass.AddSpotShadowPass(renderer, spotShadow); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddPointShadowPass(renderer, pointShadow); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddMeshPass(renderer, arrays, registry, ibl, shadow, spotShadow, pointShadow); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddSkinnedMeshPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddInstancedMeshPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddPickProxyPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddPickingPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddSelectionMaskPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddGridPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddLinesPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddOutlinePass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, _, err := pass.AddSsaoPass(renderer, renderer.AspectRatio); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddOitMeshPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddSkinnedMeshOitPass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddOitCompositePass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddAutoExposurePass(renderer); err != nil {
-				log.Fatal(err)
-			}
-			_, bloomMipView, err := pass.AddBloomPass(renderer)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddPostProcessPass(renderer, bloomMipView); err != nil {
-				log.Fatal(err)
-			}
-			_, fxaaOutputID, err := pass.AddFxaaPass(renderer)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddGizmoPass(renderer, fxaaOutputID); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddUiQuadPass(renderer, fxaaOutputID); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddUiTextPass(renderer, fxaaOutputID); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := pass.AddPresentPass(renderer, fxaaOutputID); err != nil {
-				log.Fatal(err)
+			for _, step := range steps {
+				if err := step.add(); err != nil {
+					log.Fatalf("render graph: %s: %v", step.name, err)
+				}
 			}
 		},
 		PreRender: func(engine *ecs.World) {
