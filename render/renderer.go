@@ -87,7 +87,7 @@ func NewRenderer(instance *wgpu.Instance, surface *wgpu.Surface, width, height u
 func defaultGraph(surfaceFormat wgpu.TextureFormat, width, height uint32) *Graph {
 	graph := NewGraph()
 	clearColor := wgpu.Color{R: 0.19, G: 0.24, B: 0.42, A: 1.0}
-	clearDepth := float32(1.0)
+	clearDepth := float32(0.0)
 	graph.AddColorTexture(ResourceDescriptor{
 		Name: "scene_color",
 		Kind: ResourceKindTransientColor,

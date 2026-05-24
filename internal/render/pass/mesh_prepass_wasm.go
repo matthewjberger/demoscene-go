@@ -8,4 +8,4 @@ const meshRunPrepass = false
 
 const meshMainDepthWrite = true
 
-var meshMainDepthCompare = wgpu.CompareFunctionLess
+var meshMainDepthCompare = wgpu.CompareFunctionGreater

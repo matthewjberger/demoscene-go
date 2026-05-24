@@ -108,7 +108,7 @@ func NewGridPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect f
 		DepthStencil: &wgpu.DepthStencilState{
 			Format:            render.DepthFormat,
 			DepthWriteEnabled: false,
-			DepthCompare:      wgpu.CompareFunctionLessEqual,
+			DepthCompare:      wgpu.CompareFunctionGreaterEqual,
 			StencilFront: wgpu.StencilFaceState{
 				Compare:     wgpu.CompareFunctionAlways,
 				FailOp:      wgpu.StencilOperationKeep,

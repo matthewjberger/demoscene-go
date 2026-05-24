@@ -52,7 +52,7 @@ fn fragment_main(in: VertexOutput) -> @location(0) f32 {
     let depth_dims = vec2<f32>(textureDimensions(depth_texture));
     let depth_coords = vec2<i32>(clamp(in.uv * depth_dims, vec2<f32>(0.0), depth_dims - vec2<f32>(1.0)));
     let depth = textureLoad(depth_texture, depth_coords, 0);
-    if (depth >= 1.0) {
+    if (depth <= 0.0) {
         return 1.0;
     }
     let view_pos = reconstruct_view_position(in.uv, depth);
@@ -103,7 +103,7 @@ fn fragment_main(in: VertexOutput) -> @location(0) f32 {
         }
         let sample_coords = vec2<i32>(clamp(sample_uv * depth_dims, vec2<f32>(0.0), depth_dims - vec2<f32>(1.0)));
         let sample_depth = textureLoad(depth_texture, sample_coords, 0);
-        if (sample_depth >= 1.0) {
+        if (sample_depth <= 0.0) {
             continue;
         }
         let sample_view_pos = reconstruct_view_position(sample_uv, sample_depth);

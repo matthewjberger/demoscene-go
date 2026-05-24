@@ -156,7 +156,7 @@ func newInstancedMeshState(device *wgpu.Device, aspect func() float32) (*instanc
 		DepthStencil: &wgpu.DepthStencilState{
 			Format:            render.DepthFormat,
 			DepthWriteEnabled: true,
-			DepthCompare:      wgpu.CompareFunctionLess,
+			DepthCompare:      wgpu.CompareFunctionGreater,
 			StencilFront:      wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
 			StencilBack:       wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
 		},

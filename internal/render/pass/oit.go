@@ -146,7 +146,7 @@ func newOitMeshState(device *wgpu.Device, aspect func() float32) (*oitMeshPassSt
 			Format:            render.DepthFormat,
 			DepthWriteEnabled: false,
 
-			DepthCompare: wgpu.CompareFunctionLessEqual,
+			DepthCompare: wgpu.CompareFunctionGreaterEqual,
 			StencilFront: wgpu.StencilFaceState{
 				Compare:     wgpu.CompareFunctionAlways,
 				FailOp:      wgpu.StencilOperationKeep,

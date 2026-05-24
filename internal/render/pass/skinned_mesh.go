@@ -159,7 +159,7 @@ func newSkinnedMeshState(device *wgpu.Device, aspect func() float32) (*skinnedMe
 		DepthStencil: &wgpu.DepthStencilState{
 			Format:            render.DepthFormat,
 			DepthWriteEnabled: true,
-			DepthCompare:      wgpu.CompareFunctionLess,
+			DepthCompare:      wgpu.CompareFunctionGreater,
 			StencilFront: wgpu.StencilFaceState{
 				Compare:     wgpu.CompareFunctionAlways,
 				FailOp:      wgpu.StencilOperationKeep,

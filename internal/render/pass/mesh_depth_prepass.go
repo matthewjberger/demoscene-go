@@ -131,7 +131,7 @@ func newDepthPrepassPipeline(device *wgpu.Device, viewProjLayout, handleLayout *
 		DepthStencil: &wgpu.DepthStencilState{
 			Format:            render.DepthFormat,
 			DepthWriteEnabled: true,
-			DepthCompare:      wgpu.CompareFunctionLess,
+			DepthCompare:      wgpu.CompareFunctionGreater,
 			StencilFront:      wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
 			StencilBack:       wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
 		},
