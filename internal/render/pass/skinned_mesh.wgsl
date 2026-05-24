@@ -51,6 +51,11 @@ struct ClusterUniforms {
     num_lights: u32,
     num_directional_lights: u32,
     camera_position: vec4<f32>,
+    flat_color: vec4<f32>,
+    global_unlit: f32,
+    flat_pad0: f32,
+    flat_pad1: f32,
+    flat_pad2: f32,
 };
 
 struct TextureTransform {
@@ -281,6 +286,7 @@ struct SkinnedInstance {
 @group(3) @binding(5) var transmission_color_sampler: sampler;
 
 const NO_LAYER: u32 = 0xFFFFFFFFu;
+const COOKIE_LAYER_NONE: u32 = 0xFFFFFFFFu;
 const PI: f32 = 3.14159265359;
 const MAX_LIGHTS_PER_CLUSTER: u32 = 256u;
 const LIGHT_TYPE_DIRECTIONAL: u32 = 0u;
@@ -575,16 +581,39 @@ fn spot_attenuation(point_to_light: vec3<f32>, spot_direction: vec3<f32>, outer_
     return 0.0;
 }
 
+fn sample_spot_cookie(light: Light, world_pos: vec3<f32>) -> vec3<f32> {
+    if (light.cookie_layer == COOKIE_LAYER_NONE || light.shadow_index < 0) {
+        return vec3<f32>(1.0);
+    }
+    if (u32(light.shadow_index) >= spot_shadow_uniforms.count) {
+        return vec3<f32>(1.0);
+    }
+    let entry = spot_shadow_uniforms.entries[light.shadow_index];
+    let clip = entry.view_proj * vec4<f32>(world_pos, 1.0);
+    if (clip.w <= 0.0) {
+        return vec3<f32>(0.0);
+    }
+    let ndc = clip.xyz / clip.w;
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        return vec3<f32>(0.0);
+    }
+    let layer = i32(light.cookie_layer & 0xFFFFu);
+    return textureSampleLevel(material_srgb_array, material_sampler, uv, layer, 0.0).rgb;
+}
+
 fn light_radiance(light: Light, point_to_light: vec3<f32>) -> vec3<f32> {
     var range_atten = 1.0;
     var spot_atten = 1.0;
+    var cookie = vec3<f32>(1.0);
     if (light.light_type != LIGHT_TYPE_DIRECTIONAL) {
         range_atten = range_attenuation(light.range, length(point_to_light));
     }
     if (light.light_type == LIGHT_TYPE_SPOT) {
         spot_atten = spot_attenuation(point_to_light, light.direction.xyz, light.outer_cone, light.inner_cone);
+        cookie = sample_spot_cookie(light, light.position.xyz - point_to_light);
     }
-    return range_atten * spot_atten * light.color.rgb;
+    return range_atten * spot_atten * light.color.rgb * cookie;
 }
 
 fn get_cluster_index(frag_coord: vec2<f32>, view_depth: f32) -> u32 {
@@ -950,13 +979,22 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     if (has_normal_texture) {
         normal_sample = sample_linear_layer(mat.normal_layer, texture_uv(in.uv, mat.normal_transform)).xyz;
     }
-    let normal = get_normal(geom_normal, geom_tangent, normal_sample, has_normal_texture, mat.normal_scale, 0u);
+    var normal = get_normal(geom_normal, geom_tangent, normal_sample, has_normal_texture, mat.normal_scale, 0u);
+    if (cluster_uniforms.flat_color.a > 0.0) {
+        normal = geom_normal;
+    }
 
     var albedo_sample = vec4<f32>(1.0, 1.0, 1.0, 1.0);
     if (mat.base_layer != NO_LAYER) {
         albedo_sample = sample_srgb_layer(mat.base_layer, texture_uv(in.uv, mat.base_transform));
     }
-    let base_color = mat.base_color * albedo_sample * in.color;
+    if (cluster_uniforms.flat_color.a >= 2.0) {
+        discard;
+    }
+    var base_color = mat.base_color * albedo_sample * in.color;
+    if (cluster_uniforms.flat_color.a > 0.0) {
+        base_color = vec4<f32>(cluster_uniforms.flat_color.rgb, base_color.a);
+    }
     let albedo = base_color.rgb;
 
     if (mat.alpha_mode == 1u && base_color.a < mat.alpha_cutoff) {
@@ -975,6 +1013,10 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     }
     roughness = clamp(roughness, 0.04, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
+    if (cluster_uniforms.flat_color.a > 0.0) {
+        metallic = 0.0;
+        roughness = 1.0;
+    }
 
     var occlusion = 1.0;
     if (mat.occlusion_layer != NO_LAYER) {
@@ -985,8 +1027,11 @@ fn fragment_main(in: VertexOutput) -> FragmentOutput {
     if (mat.emissive_layer != NO_LAYER) {
         emissive = emissive * sample_srgb_layer(mat.emissive_layer, texture_uv(in.uv, mat.emissive_transform)).rgb;
     }
+    if (cluster_uniforms.flat_color.a > 0.0) {
+        emissive = vec3<f32>(0.0);
+    }
 
-    if (mat.unlit != 0u) {
+    if (mat.unlit != 0u || cluster_uniforms.global_unlit > 0.5) {
         var out_unlit: FragmentOutput;
         out_unlit.color = vec4<f32>(albedo + emissive, 1.0);
         out_unlit.entity_id = in.entity_id;

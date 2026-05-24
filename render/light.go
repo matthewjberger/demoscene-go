@@ -21,6 +21,12 @@ type Light struct {
 	ShadowBias     float32
 
 	LightSize float32
+
+	// CookieEnabled projects CookieLayer (a material texture-array layer)
+	// through the spotlight's view-projection to tint the light. Spotlights
+	// with a shadow index only.
+	CookieEnabled bool
+	CookieLayer   uint32
 }
 
 const MaxLights = 8

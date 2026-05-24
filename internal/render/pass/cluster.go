@@ -34,6 +34,11 @@ type ClusterUniforms struct {
 	NumLights            uint32
 	NumDirectionalLights uint32
 	CameraPosition       [4]float32
+	FlatColor            [4]float32
+	GlobalUnlit          float32
+	FlatPad0             float32
+	FlatPad1             float32
+	FlatPad2             float32
 }
 
 type ClusterBounds struct {

@@ -532,6 +532,10 @@ func extractLights(world *ecs.World, scratch []LightGPU) []LightGPU {
 				}
 			}
 		}
+		cookieLayer := uint32(0xFFFFFFFF)
+		if light.CookieEnabled {
+			cookieLayer = light.CookieLayer
+		}
 		out = append(out, LightGPU{
 			Position:    [4]float32{matrix[12], matrix[13], matrix[14], 1.0},
 			Direction:   [4]float32{-matrix[8], -matrix[9], -matrix[10], 0.0},
@@ -542,7 +546,7 @@ func extractLights(world *ecs.World, scratch []LightGPU) []LightGPU {
 			OuterCone:   cosOrZero(light.OuterConeAngle),
 			ShadowIndex: shadowIndex,
 			LightSize:   0,
-			CookieLayer: 0xFFFFFFFF,
+			CookieLayer: cookieLayer,
 			Padding:     0,
 		})
 	})
@@ -625,6 +629,12 @@ func buildClusterUniforms(camera *render.Camera, aspect float32, context *render
 	u.NumLights = numDirectional + numLocal
 	u.NumDirectionalLights = numDirectional
 	u.CameraPosition = [4]float32{camera.Eye[0], camera.Eye[1], camera.Eye[2], 1}
+	if g, ok := ecs.Resource[render.Graphics](context.World); ok && g != nil {
+		u.FlatColor = g.FlatColor
+		if g.GlobalUnlit {
+			u.GlobalUnlit = 1
+		}
+	}
 	return u
 }
 

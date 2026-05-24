@@ -14,6 +14,13 @@ type Graphics struct {
 
 	ViewerMode bool
 
+	// GlobalUnlit renders every lit material as unlit (albedo + emissive).
+	GlobalUnlit bool
+	// FlatColor overrides surface shading for debug viewport modes, matching
+	// nightshade: alpha 0 disables it, alpha in (0,2) shades a flat color, and
+	// alpha >= 2 hides the geometry entirely.
+	FlatColor [4]float32
+
 	Exposure    float32
 	FxaaEnabled bool
 	Bloom       Bloom
