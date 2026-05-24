@@ -100,6 +100,24 @@ fn oit_weight(view_z: f32, a: f32) -> f32 {
     return a * clamp(0.03 / (1e-5 + pow(z_ratio, 4.0)), 1e-2, 3e3);
 }
 
+const BLEND_OPAQUE_ALPHA_THRESHOLD: f32 = 0.99;
+
+@fragment
+fn fs_blend_opaque_prepass(in: VertexOutput) {
+    let instance = instances[in.instance];
+    if (instance.alpha_mode != 2u) {
+        discard;
+    }
+    var alpha = instance.base_color.a * in.color.a;
+    if (instance.base_layer != NO_TEXTURE_LAYER) {
+        let layer = i32(instance.base_layer & 0xFFFFu);
+        alpha = alpha * textureSampleLevel(material_srgb_array, material_sampler, in.uv, layer, 0.0).a;
+    }
+    if (alpha < BLEND_OPAQUE_ALPHA_THRESHOLD) {
+        discard;
+    }
+}
+
 @fragment
 fn fragment_main(in: VertexOutput) -> OitOutput {
     let instance = instances[in.instance];

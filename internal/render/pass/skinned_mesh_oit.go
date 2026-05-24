@@ -25,15 +25,16 @@ type skinnedOitViewProj struct {
 }
 
 type skinnedMeshOitState struct {
-	pipeline       *wgpu.RenderPipeline
-	viewProjLayout *wgpu.BindGroupLayout
-	globalLayout   *wgpu.BindGroupLayout
-	handleLayout   *wgpu.BindGroupLayout
-	viewProjBuffer *wgpu.Buffer
-	viewProjGroup  *wgpu.BindGroup
-	uniformBuffer  *wgpu.Buffer
-	globalGroup    *wgpu.BindGroup
-	aspectFn       func() float32
+	pipeline        *wgpu.RenderPipeline
+	prepassPipeline *wgpu.RenderPipeline
+	viewProjLayout  *wgpu.BindGroupLayout
+	globalLayout    *wgpu.BindGroupLayout
+	handleLayout    *wgpu.BindGroupLayout
+	viewProjBuffer  *wgpu.Buffer
+	viewProjGroup   *wgpu.BindGroup
+	uniformBuffer   *wgpu.Buffer
+	globalGroup     *wgpu.BindGroup
+	aspectFn        func() float32
 
 	handleBindGroup *wgpu.BindGroup
 	jointGen        uint64
@@ -183,12 +184,59 @@ func newSkinnedMeshOitState(device *wgpu.Device, aspect func() float32) (*skinne
 		return nil, fmt.Errorf("skinned_mesh_oit: pipeline: %w", err)
 	}
 
+	prepassPipeline, err := device.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
+		Label:  "skinned_mesh_oit blend-opaque prepass pipeline",
+		Layout: pipelineLayout,
+		Vertex: wgpu.VertexState{
+			Module:     module,
+			EntryPoint: "vertex_main",
+			Buffers: []wgpu.VertexBufferLayout{{
+				ArrayStride: uint64(unsafe.Sizeof(asset.SkinnedMeshVertex{})),
+				StepMode:    wgpu.VertexStepModeVertex,
+				Attributes: []wgpu.VertexAttribute{
+					{Format: wgpu.VertexFormatFloat32x4, Offset: 0, ShaderLocation: 0},
+					{Format: wgpu.VertexFormatFloat32x4, Offset: 16, ShaderLocation: 1},
+					{Format: wgpu.VertexFormatFloat32x4, Offset: 32, ShaderLocation: 2},
+					{Format: wgpu.VertexFormatFloat32x4, Offset: 48, ShaderLocation: 3},
+					{Format: wgpu.VertexFormatFloat32x4, Offset: 64, ShaderLocation: 4},
+					{Format: wgpu.VertexFormatUint32x4, Offset: 80, ShaderLocation: 5},
+					{Format: wgpu.VertexFormatFloat32x4, Offset: 96, ShaderLocation: 6},
+				},
+			}},
+		},
+		Primitive: wgpu.PrimitiveState{
+			Topology:  wgpu.PrimitiveTopologyTriangleList,
+			FrontFace: wgpu.FrontFaceCCW,
+			CullMode:  wgpu.CullModeNone,
+		},
+		DepthStencil: &wgpu.DepthStencilState{
+			Format:            render.DepthFormat,
+			DepthWriteEnabled: true,
+			DepthCompare:      wgpu.CompareFunctionGreater,
+			StencilFront:      wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
+			StencilBack:       wgpu.StencilFaceState{Compare: wgpu.CompareFunctionAlways},
+		},
+		Multisample: wgpu.MultisampleState{Count: 1, Mask: 0xFFFFFFFF},
+		Fragment: &wgpu.FragmentState{
+			Module:     module,
+			EntryPoint: "fs_blend_opaque_prepass",
+		},
+	})
+	if err != nil {
+		pipeline.Release()
+		viewProjLayout.Release()
+		globalLayout.Release()
+		handleLayout.Release()
+		return nil, fmt.Errorf("skinned_mesh_oit: blend-opaque prepass pipeline: %w", err)
+	}
+
 	viewProjBuffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "skinned_mesh_oit view_proj",
 		Size:  uint64(unsafe.Sizeof(skinnedOitViewProj{})),
 		Usage: wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
+		prepassPipeline.Release()
 		pipeline.Release()
 		viewProjLayout.Release()
 		globalLayout.Release()
@@ -204,6 +252,7 @@ func newSkinnedMeshOitState(device *wgpu.Device, aspect func() float32) (*skinne
 	})
 	if err != nil {
 		viewProjBuffer.Release()
+		prepassPipeline.Release()
 		pipeline.Release()
 		viewProjLayout.Release()
 		globalLayout.Release()
@@ -219,6 +268,7 @@ func newSkinnedMeshOitState(device *wgpu.Device, aspect func() float32) (*skinne
 	if err != nil {
 		viewProjGroup.Release()
 		viewProjBuffer.Release()
+		prepassPipeline.Release()
 		pipeline.Release()
 		viewProjLayout.Release()
 		globalLayout.Release()
@@ -227,14 +277,15 @@ func newSkinnedMeshOitState(device *wgpu.Device, aspect func() float32) (*skinne
 	}
 
 	return &skinnedMeshOitState{
-		pipeline:       pipeline,
-		viewProjLayout: viewProjLayout,
-		globalLayout:   globalLayout,
-		handleLayout:   handleLayout,
-		viewProjBuffer: viewProjBuffer,
-		viewProjGroup:  viewProjGroup,
-		uniformBuffer:  uniformBuffer,
-		aspectFn:       aspect,
+		pipeline:        pipeline,
+		prepassPipeline: prepassPipeline,
+		viewProjLayout:  viewProjLayout,
+		globalLayout:    globalLayout,
+		handleLayout:    handleLayout,
+		viewProjBuffer:  viewProjBuffer,
+		viewProjGroup:   viewProjGroup,
+		uniformBuffer:   uniformBuffer,
+		aspectFn:        aspect,
 	}, nil
 }
 
@@ -322,6 +373,34 @@ func skinnedMeshOitExecute(state *skinnedMeshOitState, context *render.PassConte
 	depth.StencilLoadOp = wgpu.LoadOpLoad
 	depth.StencilStoreOp = wgpu.StoreOpStore
 
+	prepassDepth, err := context.DepthAttachment("depth")
+	if err != nil {
+		return err
+	}
+	prepassDepth.DepthLoadOp = wgpu.LoadOpLoad
+	prepassDepth.DepthStoreOp = wgpu.StoreOpStore
+	prepassDepth.StencilLoadOp = wgpu.LoadOpLoad
+	prepassDepth.StencilStoreOp = wgpu.StoreOpStore
+
+	prepass := context.Encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
+		Label:                  "skinned_mesh_oit blend-opaque prepass",
+		DepthStencilAttachment: &prepassDepth,
+	})
+	prepass.SetPipeline(state.prepassPipeline)
+	prepass.SetBindGroup(0, state.viewProjGroup, nil)
+	prepass.SetBindGroup(1, state.globalGroup, nil)
+	prepass.SetBindGroup(2, state.handleBindGroup, nil)
+	for _, group := range groups {
+		entry, ok := assets.Lookup(group.Mesh)
+		if !ok || entry == nil {
+			continue
+		}
+		prepass.SetVertexBuffer(0, entry.Vertices, 0, wgpu.WholeSize)
+		prepass.Draw(entry.VertexCount, group.Count, 0, group.FirstInstance)
+	}
+	prepass.End()
+	prepass.Release()
+
 	passEnc := context.Encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
 		Label:                  "skinned_mesh_oit",
 		ColorAttachments:       []wgpu.RenderPassColorAttachment{accum, reveal, entityID},
@@ -360,6 +439,9 @@ func skinnedMeshOitRelease(state *skinnedMeshOitState) {
 	}
 	if state.viewProjBuffer != nil {
 		state.viewProjBuffer.Release()
+	}
+	if state.prepassPipeline != nil {
+		state.prepassPipeline.Release()
 	}
 	if state.pipeline != nil {
 		state.pipeline.Release()
