@@ -255,10 +255,29 @@ var<private> POISSON_8: array<vec2<f32>, 8> = array<vec2<f32>, 8>(
     vec2<f32>(0.625, 0.0),
 );
 
+struct MorphDisplacement {
+    position: vec3<f32>,
+    _pad0: f32,
+    normal: vec3<f32>,
+    _pad1: f32,
+    tangent: vec3<f32>,
+    _pad2: f32,
+};
+
+struct MorphInstance {
+    weights: array<f32, 8>,
+    target_count: u32,
+    vertex_count: u32,
+    _mpad0: u32,
+    _mpad1: u32,
+};
+
 @group(2) @binding(0) var<storage, read> models:           array<mat4x4<f32>>;
 @group(2) @binding(1) var<storage, read> material_indices: array<u32>;
 @group(2) @binding(2) var<storage, read> entity_ids:       array<u32>;
 @group(2) @binding(3) var<storage, read> visible_indices:  array<u32>;
+@group(2) @binding(4) var<storage, read> morph_displacements: array<MorphDisplacement>;
+@group(2) @binding(5) var<storage, read> morph_instances:     array<MorphInstance>;
 
 @group(3) @binding(0) var irradiance_map:  texture_cube<f32>;
 @group(3) @binding(1) var prefiltered_env: texture_cube<f32>;
@@ -825,15 +844,30 @@ fn shade_one_light(light: Light, point_to_light: vec3<f32>, v: vec3<f32>, n: vec
 }
 
 @vertex
-fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32) -> VertexOutput {
+fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32, @builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     let slot = visible_indices[instance_index];
     let model = models[slot];
+    var local_position = input.position.xyz;
+    var local_normal = input.normal.xyz;
+    var local_tangent = input.tangent.xyz;
+    var morph = morph_instances[slot];
+    if (morph.target_count > 0u) {
+        for (var t = 0u; t < morph.target_count; t = t + 1u) {
+            let w = morph.weights[t];
+            if (abs(w) > 0.0001) {
+                let d = morph_displacements[t * morph.vertex_count + vertex_index];
+                local_position = local_position + d.position * w;
+                local_normal = local_normal + d.normal * w;
+                local_tangent = local_tangent + d.tangent * w;
+            }
+        }
+    }
     var out: VertexOutput;
-    let world = model * input.position;
+    let world = model * vec4<f32>(local_position, 1.0);
     out.clip_position = view_proj * world;
     out.world_pos = world.xyz;
-    out.world_normal = (model * vec4<f32>(input.normal.xyz, 0.0)).xyz;
-    let world_tangent = (model * vec4<f32>(input.tangent.xyz, 0.0)).xyz;
+    out.world_normal = (model * vec4<f32>(local_normal, 0.0)).xyz;
+    let world_tangent = (model * vec4<f32>(local_tangent, 0.0)).xyz;
     out.world_tangent = vec4<f32>(world_tangent, input.tangent.w);
     out.uv = input.uv.xy;
     out.color = input.color;

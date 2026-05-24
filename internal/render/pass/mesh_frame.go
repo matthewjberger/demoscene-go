@@ -68,10 +68,16 @@ func meshPrepare(state *meshPassState, context *render.PassContext) error {
 			bucket.entityToSlot[entity] = slot
 			bucket.slotEntity = append(bucket.slotEntity, entity)
 			state.entityHandle[entity] = handle
-			if err := ensureHandleCapacity(bucket, context.Device, state.handleBgLayout); err != nil {
+			assets := ecs.MustResource[asset.MeshAssetsResource](context.World).Assets
+			morphBuffer, _ := assets.MorphInfo(handle)
+			if morphBuffer == nil {
+				morphBuffer = state.dummyMorphBuffer
+			}
+			if err := ensureHandleCapacity(bucket, context.Device, state.handleBgLayout, morphBuffer); err != nil {
 				return
 			}
 			writeBuffer(context.Device, context.Queue, context.Encoder, bucket.modelBuffer, uint64(slot)*matrixSize, bytesOf(&global.Matrix))
+			writeMorphInstance(context, bucket, handle, entity, slot)
 
 			registry := ecs.MustResource[asset.MaterialRegistryResource](context.World).Registry
 			materialID, isNew := registry.AssignID(entity)
@@ -216,8 +222,49 @@ func meshPrepare(state *meshPassState, context *render.PassContext) error {
 		}
 	}
 
+	syncMorphWeights(state, context)
 	dispatchCullPasses(state, context)
 	return nil
+}
+
+func writeMorphInstance(context *render.PassContext, bucket *handleInstances, handle asset.MeshHandle, entity ecs.Entity, slot uint32) {
+	if bucket.morphInstanceBuffer == nil {
+		return
+	}
+	assets := ecs.MustResource[asset.MeshAssetsResource](context.World).Assets
+	_, targetCount := assets.MorphInfo(handle)
+	var inst morphInstanceGPU
+	inst.TargetCount = targetCount
+	if entry, ok := assets.Lookup(handle); ok {
+		inst.VertexCount = entry.VertexCount
+	}
+	if targetCount > 0 {
+		if weights, ok := ecs.Get[asset.MorphWeights](context.World, entity); ok {
+			for i := 0; i < len(weights.Weights) && i < 8; i++ {
+				inst.Weights[i] = weights.Weights[i]
+			}
+		}
+	}
+	writeBuffer(context.Device, context.Queue, context.Encoder, bucket.morphInstanceBuffer, uint64(slot)*morphInstanceSize, bytesOf(&inst))
+}
+
+func syncMorphWeights(state *meshPassState, context *render.PassContext) {
+	morphMask := ecs.MustMaskOf[asset.MorphWeights](context.World)
+	context.World.ForEach(morphMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
+		handle, ok := state.entityHandle[entity]
+		if !ok {
+			return
+		}
+		bucket, ok := state.perHandle[handle]
+		if !ok {
+			return
+		}
+		slot, ok := bucket.entityToSlot[entity]
+		if !ok {
+			return
+		}
+		writeMorphInstance(context, bucket, handle, entity, slot)
+	})
 }
 
 func ensureCullBindings(bucket *handleInstances, device *wgpu.Device, culling *meshCullingPipeline) error {
@@ -449,6 +496,9 @@ func meshRelease(state *meshPassState) {
 	}
 	if state.transmissionSampler != nil {
 		state.transmissionSampler.Release()
+	}
+	if state.dummyMorphBuffer != nil {
+		state.dummyMorphBuffer.Release()
 	}
 	if state.iblBgLayout != nil {
 		state.iblBgLayout.Release()

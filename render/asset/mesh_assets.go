@@ -49,13 +49,26 @@ type MeshVertex struct {
 	Color    [4]float32
 }
 
+// MorphDisplacement is one vertex's delta for a single morph target. Layout
+// matches the WGSL struct in the mesh shaders (std430, 48 bytes).
+type MorphDisplacement struct {
+	Position [3]float32
+	_        float32
+	Normal   [3]float32
+	_        float32
+	Tangent  [3]float32
+	_        float32
+}
+
 type meshEntry struct {
-	Name        string
-	Vertices    *wgpu.Buffer
-	VertexCount uint32
-	Texture     TextureID
-	Bounds      BoundingVolume
-	CpuVertices []MeshVertex
+	Name             string
+	Vertices         *wgpu.Buffer
+	VertexCount      uint32
+	Texture          TextureID
+	Bounds           BoundingVolume
+	CpuVertices      []MeshVertex
+	MorphBuffer      *wgpu.Buffer
+	MorphTargetCount uint32
 }
 
 type MeshAssets struct {
@@ -88,6 +101,37 @@ func (assets *MeshAssets) Register(device *wgpu.Device, name string, vertices []
 		CpuVertices: cpu,
 	})
 	return handle, nil
+}
+
+// RegisterWithMorph registers a mesh that carries morph targets. displacements
+// is laid out target-major: displacements[target*len(vertices) + vertex].
+func (assets *MeshAssets) RegisterWithMorph(device *wgpu.Device, name string, vertices []MeshVertex, displacements []MorphDisplacement, targetCount uint32) (MeshHandle, error) {
+	handle, err := assets.Register(device, name, vertices)
+	if err != nil {
+		return 0, err
+	}
+	if targetCount == 0 || len(displacements) == 0 {
+		return handle, nil
+	}
+	morphBuffer, err := device.CreateBufferInit(&wgpu.BufferInitDescriptor{
+		Label:    name + " morph buffer",
+		Contents: wgpu.ToBytes(displacements),
+		Usage:    wgpu.BufferUsageStorage,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("mesh assets: %s morph buffer: %w", name, err)
+	}
+	assets.entries[handle].MorphBuffer = morphBuffer
+	assets.entries[handle].MorphTargetCount = targetCount
+	return handle, nil
+}
+
+// MorphInfo returns the morph displacement buffer and target count for a mesh.
+func (assets *MeshAssets) MorphInfo(handle MeshHandle) (*wgpu.Buffer, uint32) {
+	if int(handle) >= len(assets.entries) {
+		return nil, 0
+	}
+	return assets.entries[handle].MorphBuffer, assets.entries[handle].MorphTargetCount
 }
 
 func (assets *MeshAssets) CpuVertices(handle MeshHandle) []MeshVertex {
@@ -125,6 +169,10 @@ func (assets *MeshAssets) Release() {
 		if assets.entries[index].Vertices != nil {
 			assets.entries[index].Vertices.Release()
 			assets.entries[index].Vertices = nil
+		}
+		if assets.entries[index].MorphBuffer != nil {
+			assets.entries[index].MorphBuffer.Release()
+			assets.entries[index].MorphBuffer = nil
 		}
 	}
 	assets.entries = nil

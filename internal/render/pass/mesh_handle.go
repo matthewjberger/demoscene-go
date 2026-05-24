@@ -23,6 +23,8 @@ type handleInstances struct {
 	cullBindGroup        *wgpu.BindGroup
 	bindGroup            *wgpu.BindGroup
 	shadowBindGroup      *wgpu.BindGroup
+	morphInstanceBuffer  *wgpu.Buffer
+	morphDisplacement    *wgpu.Buffer
 	capacity             uint32
 
 	entityToSlot map[ecs.Entity]uint32
@@ -66,6 +68,10 @@ func releaseHandleInstances(h *handleInstances) {
 		h.shadowBindGroup.Release()
 		h.shadowBindGroup = nil
 	}
+	if h.morphInstanceBuffer != nil {
+		h.morphInstanceBuffer.Release()
+		h.morphInstanceBuffer = nil
+	}
 }
 
 type drawIndirectCommand struct {
@@ -81,7 +87,19 @@ const matrixSize uint64 = uint64(unsafe.Sizeof(mgl32.Mat4{}))
 
 const minHandleCapacity uint32 = 64
 
-func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.BindGroupLayout) error {
+// morphInstanceGPU mirrors the WGSL MorphInstance struct (std430, 48 bytes).
+type morphInstanceGPU struct {
+	Weights     [8]float32
+	TargetCount uint32
+	VertexCount uint32
+	Pad0        uint32
+	Pad1        uint32
+}
+
+const morphInstanceSize = uint64(unsafe.Sizeof(morphInstanceGPU{}))
+
+func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.BindGroupLayout, morphDisplacement *wgpu.Buffer) error {
+	h.morphDisplacement = morphDisplacement
 	required := uint32(len(h.slotEntity))
 	if h.capacity >= required && h.modelBuffer != nil && h.materialIndexBuffer != nil && h.entityIdBuffer != nil && h.visibleIndicesBuffer != nil {
 		return nil
@@ -135,6 +153,18 @@ func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.
 		entityIdBuffer.Release()
 		return fmt.Errorf("mesh pass: visible_indices buffer: %w", err)
 	}
+	morphInstanceBuffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
+		Label: "mesh morph instance buffer",
+		Size:  uint64(newCapacity) * morphInstanceSize,
+		Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
+	})
+	if err != nil {
+		modelBuffer.Release()
+		materialIndexBuffer.Release()
+		entityIdBuffer.Release()
+		visibleIndicesBuffer.Release()
+		return fmt.Errorf("mesh pass: morph instance buffer: %w", err)
+	}
 	bindGroup, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
 		Label:  "mesh per-handle bind group",
 		Layout: layout,
@@ -143,6 +173,8 @@ func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.
 			{Binding: 1, Buffer: materialIndexBuffer, Offset: 0, Size: wgpu.WholeSize},
 			{Binding: 2, Buffer: entityIdBuffer, Offset: 0, Size: wgpu.WholeSize},
 			{Binding: 3, Buffer: visibleIndicesBuffer, Offset: 0, Size: wgpu.WholeSize},
+			{Binding: 4, Buffer: morphDisplacement, Offset: 0, Size: wgpu.WholeSize},
+			{Binding: 5, Buffer: morphInstanceBuffer, Offset: 0, Size: wgpu.WholeSize},
 		},
 	})
 	if err != nil {
@@ -150,8 +182,13 @@ func ensureHandleCapacity(h *handleInstances, device *wgpu.Device, layout *wgpu.
 		materialIndexBuffer.Release()
 		entityIdBuffer.Release()
 		visibleIndicesBuffer.Release()
+		morphInstanceBuffer.Release()
 		return fmt.Errorf("mesh pass: per-handle bind group: %w", err)
 	}
+	if h.morphInstanceBuffer != nil {
+		h.morphInstanceBuffer.Release()
+	}
+	h.morphInstanceBuffer = morphInstanceBuffer
 	if h.bindGroup != nil {
 		h.bindGroup.Release()
 	}

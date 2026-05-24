@@ -80,15 +80,16 @@ type LoadedCamera struct {
 }
 
 type SceneNode struct {
-	Name            string
-	Translation     [3]float32
-	Rotation        [4]float32
-	Scale           [3]float32
-	Children        []int
-	Mesh            MeshHandle
-	HasMesh         bool
-	Material        Material
-	ChildPrimitives []SceneNodePrimitive
+	Name             string
+	Translation      [3]float32
+	Rotation         [4]float32
+	Scale            [3]float32
+	Children         []int
+	Mesh             MeshHandle
+	HasMesh          bool
+	MorphTargetCount uint32
+	Material         Material
+	ChildPrimitives  []SceneNodePrimitive
 
 	SkinIndex int
 
@@ -213,7 +214,11 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 			if err != nil {
 				return nil, fmt.Errorf("gltf %q: mesh %d primitive %d: %w", label, meshIdx, primIdx, err)
 			}
-			handle, err := assets.Register(device, name, vertices)
+			morphDisplacements, morphTargetCount, err := readMorphDisplacements(doc, prim)
+			if err != nil {
+				return nil, fmt.Errorf("gltf %q: mesh %d primitive %d morph: %w", label, meshIdx, primIdx, err)
+			}
+			handle, err := assets.RegisterWithMorph(device, name, vertices, morphDisplacements, morphTargetCount)
 			if err != nil {
 				return nil, err
 			}
@@ -274,6 +279,9 @@ func LoadGltfReaderOpts(device *wgpu.Device, queue *wgpu.Queue, assets *MeshAsse
 				out.HasMesh = true
 				out.Mesh = staticPrims[0].Mesh
 				out.Material = staticPrims[0].Material
+				if _, count := assets.MorphInfo(staticPrims[0].Mesh); count > 0 {
+					out.MorphTargetCount = count
+				}
 			case len(skinnedPrims) == 1 && len(staticPrims) == 0:
 				out.HasSkinnedMesh = true
 				out.SkinnedMesh = skinnedPrims[0].Mesh
@@ -325,6 +333,7 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene, device *wgpu.Device)
 	instancedMeshMask := ecs.MustMaskOf[InstancedMesh](world)
 	skinnedMeshMask := ecs.MustMaskOf[SkinnedMesh](world)
 	materialMask := ecs.MustMaskOf[Material](world)
+	morphMask := ecs.MustMaskOf[MorphWeights](world)
 
 	transformMask := localMask | globalMask | dirtyMask
 	for i := range scene.Nodes {
@@ -362,6 +371,10 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene, device *wgpu.Device)
 			world.AddComponents(entity, meshMask|materialMask)
 			ecs.Set(world, entity, RenderMesh{Mesh: node.Mesh})
 			ecs.Set(world, entity, node.Material)
+			if node.MorphTargetCount > 0 {
+				world.AddComponents(entity, morphMask)
+				ecs.Set(world, entity, MorphWeights{Weights: make([]float32, node.MorphTargetCount)})
+			}
 		}
 		if node.HasSkinnedMesh {
 			world.AddComponents(entity, skinnedMeshMask|materialMask)
@@ -1306,6 +1319,65 @@ func buildGltfPrimitive(doc *gltf.Document, prim *gltf.Primitive) ([]MeshVertex,
 	return expanded, nil
 }
 
+// readMorphDisplacements reads a primitive's morph targets and expands them to
+// match the de-indexed vertex array produced by buildGltfPrimitive. The result
+// is target-major: out[target*vertexCount + vertex]. glTF stores tangent morph
+// deltas as VEC3 (the w component is not morphed).
+func readMorphDisplacements(doc *gltf.Document, prim *gltf.Primitive) ([]MorphDisplacement, uint32, error) {
+	targetCount := len(prim.Targets)
+	if targetCount == 0 {
+		return nil, 0, nil
+	}
+	if targetCount > 8 {
+		targetCount = 8
+	}
+	indices, err := readIndices(doc, prim)
+	if err != nil {
+		return nil, 0, err
+	}
+	n := len(indices)
+	if n == 0 {
+		return nil, 0, nil
+	}
+	out := make([]MorphDisplacement, targetCount*n)
+	for t := range targetCount {
+		target := prim.Targets[t]
+		var positions, normals, tangents [][3]float32
+		if acc, ok := target["POSITION"]; ok {
+			positions, err = modeler.ReadPosition(doc, doc.Accessors[acc], nil)
+			if err != nil {
+				return nil, 0, fmt.Errorf("read morph position: %w", err)
+			}
+		}
+		if acc, ok := target["NORMAL"]; ok {
+			normals, err = modeler.ReadNormal(doc, doc.Accessors[acc], nil)
+			if err != nil {
+				return nil, 0, fmt.Errorf("read morph normal: %w", err)
+			}
+		}
+		if acc, ok := target["TANGENT"]; ok {
+			tangents, err = modeler.ReadNormal(doc, doc.Accessors[acc], nil)
+			if err != nil {
+				return nil, 0, fmt.Errorf("read morph tangent: %w", err)
+			}
+		}
+		for i, srcIdx := range indices {
+			var d MorphDisplacement
+			if int(srcIdx) < len(positions) {
+				d.Position = positions[srcIdx]
+			}
+			if int(srcIdx) < len(normals) {
+				d.Normal = normals[srcIdx]
+			}
+			if int(srcIdx) < len(tangents) {
+				d.Tangent = tangents[srcIdx]
+			}
+			out[t*n+i] = d
+		}
+	}
+	return out, uint32(targetCount), nil
+}
+
 func buildSkinnedGltfPrimitive(doc *gltf.Document, prim *gltf.Primitive) ([]SkinnedMeshVertex, error) {
 	posAttr, ok := prim.Attributes["POSITION"]
 	if !ok {
@@ -1518,7 +1590,31 @@ func readAnimations(doc *gltf.Document) ([]AnimationClip, error) {
 				if err := accessorScalarFloat(doc, outputAcc, vals); err != nil {
 					return nil, fmt.Errorf("animation %d sampler %d output: %w", i, sIdx, err)
 				}
-				sampler.ScalarOutputs = [][]float32{vals}
+				// Morph-weight samplers store frames*targets scalars flat; split
+				// them into one weight slice per keyframe so the sampler indexes
+				// align with Inputs.
+				frames := len(inputs)
+				if frames <= 0 {
+					sampler.ScalarOutputs = [][]float32{vals}
+				} else {
+					perFrame := len(vals) / frames
+					if perFrame < 1 {
+						perFrame = 1
+					}
+					out := make([][]float32, frames)
+					for f := range frames {
+						start := f * perFrame
+						end := start + perFrame
+						if start > len(vals) {
+							start = len(vals)
+						}
+						if end > len(vals) {
+							end = len(vals)
+						}
+						out[f] = vals[start:end]
+					}
+					sampler.ScalarOutputs = out
+				}
 			}
 			samplers[sIdx] = sampler
 			for _, t := range inputs {

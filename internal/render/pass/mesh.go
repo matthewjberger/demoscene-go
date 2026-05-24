@@ -35,6 +35,7 @@ type meshPassState struct {
 	spotShadow         *SpotShadow
 	pointShadow        *PointShadow
 	lastRegistryBuffer *wgpu.Buffer
+	dummyMorphBuffer   *wgpu.Buffer
 
 	ibl                 *IBL
 	transmissionTexture *wgpu.Texture
@@ -81,6 +82,16 @@ func NewMeshPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect f
 		return nil, err
 	}
 	state.handleBgLayout = handleBgLayout
+
+	dummyMorphBuffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
+		Label: "mesh dummy morph buffer",
+		Size:  morphInstanceSize,
+		Usage: wgpu.BufferUsageStorage | wgpu.BufferUsageCopyDst,
+	})
+	if err != nil {
+		return nil, err
+	}
+	state.dummyMorphBuffer = dummyMorphBuffer
 
 	iblBgLayout, err := createIblBgLayout(device)
 	if err != nil {

@@ -96,10 +96,29 @@ struct Material {
 
 @group(0) @binding(0) var<uniform> view_proj: mat4x4<f32>;
 
+struct MorphDisplacement {
+    position: vec3<f32>,
+    _pad0: f32,
+    normal: vec3<f32>,
+    _pad1: f32,
+    tangent: vec3<f32>,
+    _pad2: f32,
+};
+
+struct MorphInstance {
+    weights: array<f32, 8>,
+    target_count: u32,
+    vertex_count: u32,
+    _mpad0: u32,
+    _mpad1: u32,
+};
+
 @group(1) @binding(0) var<storage, read> models:           array<mat4x4<f32>>;
 @group(1) @binding(1) var<storage, read> material_indices: array<u32>;
 @group(1) @binding(2) var<storage, read> entity_ids:       array<u32>;
 @group(1) @binding(3) var<storage, read> visible_indices:  array<u32>;
+@group(1) @binding(4) var<storage, read> morph_displacements: array<MorphDisplacement>;
+@group(1) @binding(5) var<storage, read> morph_instances:     array<MorphInstance>;
 
 @group(2) @binding(0) var<storage, read> materials: array<Material>;
 
@@ -130,11 +149,21 @@ fn texture_uv(uv: vec2<f32>, transform: TextureTransform) -> vec2<f32> {
 }
 
 @vertex
-fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32) -> VertexOutput {
+fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32, @builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     let slot = visible_indices[instance_index];
     let model = models[slot];
+    var local_position = input.position.xyz;
+    var morph = morph_instances[slot];
+    if (morph.target_count > 0u) {
+        for (var t = 0u; t < morph.target_count; t = t + 1u) {
+            let w = morph.weights[t];
+            if (abs(w) > 0.0001) {
+                local_position = local_position + morph_displacements[t * morph.vertex_count + vertex_index].position * w;
+            }
+        }
+    }
     var out: VertexOutput;
-    let world = model * input.position;
+    let world = model * vec4<f32>(local_position, 1.0);
     out.clip_position = view_proj * world;
     out.material_index = material_indices[slot];
     out.uv = input.uv.xy;

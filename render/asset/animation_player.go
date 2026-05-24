@@ -103,6 +103,9 @@ func applyPlayer(world *ecs.World, p *AnimationPlayer, markDirty func(ecs.Entity
 
 func sampleChannelInto(world *ecs.World, target ecs.Entity, channel *AnimationChannel, t float32) bool {
 	keyA, keyB, factor := findKeyframe(channel.Sampler.Inputs, t)
+	if channel.Property == AnimationMorphWeights {
+		return sampleMorphInto(world, target, channel, keyA, keyB, factor)
+	}
 	local, ok := ecs.GetMut[transform.LocalTransform](world, target)
 	if !ok {
 		return false
@@ -125,6 +128,36 @@ func sampleChannelInto(world *ecs.World, target ecs.Entity, channel *AnimationCh
 		}
 	}
 	return false
+}
+
+func sampleMorphInto(world *ecs.World, target ecs.Entity, channel *AnimationChannel, a, b int, factor float32) bool {
+	outputs := channel.Sampler.ScalarOutputs
+	if a >= len(outputs) {
+		return false
+	}
+	weights, ok := ecs.GetMut[MorphWeights](world, target)
+	if !ok || len(weights.Weights) == 0 {
+		return false
+	}
+	frameA := outputs[a]
+	frameB := outputs[b]
+	step := channel.Sampler.Interpolation == InterpolationStep || a == b
+	for i := range weights.Weights {
+		va := float32(0)
+		if i < len(frameA) {
+			va = frameA[i]
+		}
+		if step {
+			weights.Weights[i] = va
+			continue
+		}
+		vb := va
+		if i < len(frameB) {
+			vb = frameB[i]
+		}
+		weights.Weights[i] = va + (vb-va)*factor
+	}
+	return true
 }
 
 func findKeyframe(times []float32, t float32) (int, int, float32) {
