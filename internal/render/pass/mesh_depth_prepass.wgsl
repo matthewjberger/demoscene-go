@@ -145,7 +145,7 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32)
 @fragment
 fn fragment_main(in: VertexOutput) {
     let mat = materials[in.material_index];
-    if (mat.alpha_mode == 2u) {
+    if (mat.alpha_mode == 2u || mat.transmission_factor > 0.0) {
         discard;
     }
     if (mat.alpha_mode == 1u) {

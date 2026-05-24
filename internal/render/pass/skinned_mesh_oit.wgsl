@@ -206,8 +206,11 @@ const BLEND_OPAQUE_ALPHA_THRESHOLD: f32 = 0.99;
 @fragment
 fn fs_blend_opaque_prepass(in: VertexOutput) {
     let instance = instances[in.instance];
-    if (instance.alpha_mode != 2u) {
+    if (instance.alpha_mode != 2u && instance.transmission_factor <= 0.0) {
         discard;
+    }
+    if (instance.transmission_factor > 0.0) {
+        return;
     }
     var alpha = instance.base_color.a * in.color.a;
     if (instance.base_layer != NO_TEXTURE_LAYER) {
@@ -222,7 +225,7 @@ fn fs_blend_opaque_prepass(in: VertexOutput) {
 @fragment
 fn fragment_main(in: VertexOutput) -> OitOutput {
     let instance = instances[in.instance];
-    if (instance.alpha_mode != 2u) {
+    if (instance.alpha_mode != 2u && instance.transmission_factor <= 0.0) {
         discard;
     }
     var base_color = instance.base_color * in.color;

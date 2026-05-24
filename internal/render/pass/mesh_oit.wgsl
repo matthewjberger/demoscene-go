@@ -252,7 +252,7 @@ fn get_ibl_volume_refraction(
 @fragment
 fn fs_blend_opaque_prepass(in: VertexOutput) {
     let mat = materials[in.material_index];
-    if (mat.alpha_mode != 2u) {
+    if (mat.alpha_mode != 2u && mat.transmission_factor <= 0.0) {
         discard;
     }
     if (mat.transmission_factor > 0.0) {
@@ -271,7 +271,7 @@ fn fs_blend_opaque_prepass(in: VertexOutput) {
 @fragment
 fn fragment_main(in: VertexOutput) -> OitOutput {
     let mat = materials[in.material_index];
-    if (mat.alpha_mode != 2u) {
+    if (mat.alpha_mode != 2u && mat.transmission_factor <= 0.0) {
         discard;
     }
 

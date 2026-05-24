@@ -399,7 +399,7 @@ func (sc *SkinningCompute) buildInstances(world *ecs.World) {
 			instance.AttenuationDistance = material.AttenuationDistance
 			instance.AttenuationColor = material.AttenuationColor
 		}
-		records = append(records, record{instance: instance, mesh: sm.Mesh, transparent: instance.AlphaMode == 2})
+		records = append(records, record{instance: instance, mesh: sm.Mesh, transparent: instance.AlphaMode == 2 || instance.TransmissionFactor > 0})
 	})
 	if len(records) == 0 {
 		return
