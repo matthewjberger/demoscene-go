@@ -249,11 +249,11 @@ func NewShadowDepthPass(device *wgpu.Device, shadow *Shadow) (*render.Pass, erro
 
 	handleBgLayout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
 		Label: "shadow per-handle bind group layout",
-		Entries: []wgpu.BindGroupLayoutEntry{{
-			Binding:    0,
-			Visibility: wgpu.ShaderStageVertex,
-			Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage},
-		}},
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{Binding: 0, Visibility: wgpu.ShaderStageVertex, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
+			{Binding: 1, Visibility: wgpu.ShaderStageVertex, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
+			{Binding: 2, Visibility: wgpu.ShaderStageVertex, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("shadow_depth: handle layout: %w", err)
@@ -661,7 +661,7 @@ func shadowDepthExecute(state *shadowDepthPassState, context *render.PassContext
 			if !ok {
 				continue
 			}
-			shadowBg, err := ensureShadowHandleBindGroup(bucket, context.Device, state.handleBgLayout)
+			shadowBg, err := ensureShadowHandleBindGroup(bucket, context.Device, state.handleBgLayout, shadowMorphBuffer(context.World, assets, handle))
 			if err != nil {
 				pass.End()
 				pass.Release()
@@ -794,15 +794,20 @@ func shadowDepthRelease(state *shadowDepthPassState) {
 	}
 }
 
-func ensureShadowHandleBindGroup(bucket *handleInstances, device *wgpu.Device, layout *wgpu.BindGroupLayout) (*wgpu.BindGroup, error) {
+func ensureShadowHandleBindGroup(bucket *handleInstances, device *wgpu.Device, layout *wgpu.BindGroupLayout, morphDisplacement *wgpu.Buffer) (*wgpu.BindGroup, error) {
 	if bucket.shadowBindGroup != nil {
 		return bucket.shadowBindGroup, nil
+	}
+	if bucket.morphInstanceBuffer == nil || morphDisplacement == nil {
+		return nil, nil
 	}
 	bg, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
 		Label:  "shadow per-handle bind group",
 		Layout: layout,
 		Entries: []wgpu.BindGroupEntry{
 			{Binding: 0, Buffer: bucket.modelBuffer, Offset: 0, Size: wgpu.WholeSize},
+			{Binding: 1, Buffer: morphDisplacement, Offset: 0, Size: wgpu.WholeSize},
+			{Binding: 2, Buffer: bucket.morphInstanceBuffer, Offset: 0, Size: wgpu.WholeSize},
 		},
 	})
 	if err != nil {
@@ -810,6 +815,18 @@ func ensureShadowHandleBindGroup(bucket *handleInstances, device *wgpu.Device, l
 	}
 	bucket.shadowBindGroup = bg
 	return bg, nil
+}
+
+// shadowMorphBuffer returns the morph displacement buffer for a static mesh, or
+// the mesh pass's dummy when the mesh has none.
+func shadowMorphBuffer(world *ecs.World, assets *asset.MeshAssets, handle asset.MeshHandle) *wgpu.Buffer {
+	if buffer, _ := assets.MorphInfo(handle); buffer != nil {
+		return buffer
+	}
+	if state, ok := findMeshPassState(world); ok {
+		return state.dummyMorphBuffer
+	}
+	return nil
 }
 
 func AddShadowDepthPass(renderer *render.Renderer, shadow *Shadow) (*render.Pass, error) {

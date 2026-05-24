@@ -41,7 +41,7 @@ func spotShadowExecute(state *spotShadowPassState, context *render.PassContext) 
 			if !ok {
 				continue
 			}
-			shadowBg, err := ensureShadowHandleBindGroup(bucket, context.Device, state.handleBgLayout)
+			shadowBg, err := ensureShadowHandleBindGroup(bucket, context.Device, state.handleBgLayout, shadowMorphBuffer(context.World, assets, handle))
 			if err != nil {
 				passEnc.End()
 				return err

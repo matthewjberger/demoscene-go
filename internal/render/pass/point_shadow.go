@@ -242,11 +242,9 @@ func AddPointShadowPass(renderer *render.Renderer, shadow *PointShadow) (*render
 	handleLayout, err := renderer.Device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
 		Label: "point shadow handle layout",
 		Entries: []wgpu.BindGroupLayoutEntry{
-			{
-				Binding:    0,
-				Visibility: wgpu.ShaderStageVertex,
-				Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage},
-			},
+			{Binding: 0, Visibility: wgpu.ShaderStageVertex, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
+			{Binding: 1, Visibility: wgpu.ShaderStageVertex, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
+			{Binding: 2, Visibility: wgpu.ShaderStageVertex, Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
 		},
 	})
 	if err != nil {
@@ -473,7 +471,7 @@ func pointShadowExecute(state *pointShadowPassState, context *render.PassContext
 				if !ok {
 					continue
 				}
-				shadowBg, err := ensureShadowHandleBindGroup(bucket, context.Device, state.handleLayout)
+				shadowBg, err := ensureShadowHandleBindGroup(bucket, context.Device, state.handleLayout, shadowMorphBuffer(context.World, assets, handle))
 				if err != nil {
 					passEnc.End()
 					passEnc.Release()
