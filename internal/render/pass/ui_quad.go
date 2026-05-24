@@ -14,12 +14,13 @@ import (
 //go:embed ui_quad.wgsl
 var uiQuadShader string
 
-const uiQuadInstanceBytes = uint64(32)
+const uiQuadInstanceBytes = uint64(48)
 const uiQuadMinCapacity uint32 = 64
 
 type uiQuadInstance struct {
 	Rect  [4]float32
 	Color [4]float32
+	Clip  [4]float32
 }
 
 type uiQuadViewport struct {
@@ -42,11 +43,11 @@ type uiQuadPassState struct {
 }
 
 func visibleInClip(node *ui.Node) bool {
-	if node.Clip.Width <= 0 || node.Clip.Height <= 0 {
+	if node.ClipResolved.Width <= 0 || node.ClipResolved.Height <= 0 {
 		return true
 	}
 	r := node.Resolved
-	c := node.Clip
+	c := node.ClipResolved
 	return r.X+r.Width > c.X && r.X < c.X+c.Width &&
 		r.Y+r.Height > c.Y && r.Y < c.Y+c.Height
 }
@@ -197,7 +198,7 @@ func uiQuadPrepare(state *uiQuadPassState, context *render.PassContext) error {
 		nodes, _ := ecs.Column[ui.Node](uiWorld, table)
 		colors, _ := ecs.Column[ui.Color](uiWorld, table)
 		node := &nodes[index]
-		if !visibleInClip(node) {
+		if node.HiddenResolved || !visibleInClip(node) {
 			return
 		}
 		color := colors[index].RGBA
@@ -212,6 +213,7 @@ func uiQuadPrepare(state *uiQuadPassState, context *render.PassContext) error {
 		state.scratch = append(state.scratch, uiQuadInstance{
 			Rect:  [4]float32{node.Resolved.X, node.Resolved.Y, node.Resolved.Width, node.Resolved.Height},
 			Color: color,
+			Clip:  [4]float32{node.ClipResolved.X, node.ClipResolved.Y, node.ClipResolved.Width, node.ClipResolved.Height},
 		})
 		state.scratchZ = append(state.scratchZ, node.ZIndex)
 	})

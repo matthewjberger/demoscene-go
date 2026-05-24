@@ -100,6 +100,8 @@ func placeRoot(world *ecs.World, entity ecs.Entity, viewportW, viewportH float32
 	node, _ := ecs.GetMut[Node](world, entity)
 	x, y := anchoredOrigin(node, viewportW, viewportH)
 	node.Resolved = Rect{X: x, Y: y, Width: node.Width, Height: node.Height}
+	node.HiddenResolved = node.Hidden
+	node.ClipResolved = Rect{}
 }
 
 func placeChildren(world *ecs.World, state *LayoutState, parent ecs.Entity) {
@@ -108,6 +110,18 @@ func placeChildren(world *ecs.World, state *LayoutState, parent ecs.Entity) {
 		return
 	}
 	parentNode, _ := ecs.Get[Node](world, parent)
+
+	parentHidden := parentNode.HiddenResolved
+	activeClip := parentNode.ClipResolved
+	if parentNode.ClipChildren {
+		activeClip = intersectClip(activeClip, parentNode.Resolved)
+	}
+	for _, child := range children {
+		if childNode, ok := ecs.GetMut[Node](world, child); ok {
+			childNode.HiddenResolved = childNode.Hidden || parentHidden
+			childNode.ClipResolved = activeClip
+		}
+	}
 
 	innerW := parentNode.Resolved.Width - parentNode.Padding*2
 	innerH := parentNode.Resolved.Height - parentNode.Padding*2
@@ -186,6 +200,28 @@ func childrenAxis(world *ecs.World, children []ecs.Entity, rowAxis bool) (used, 
 		totalGrow += node.Grow
 	}
 	return
+}
+
+// intersectClip returns the overlap of two clip rects. A rect with
+// non-positive size means "no clip", so intersecting with it yields the other.
+func intersectClip(a, b Rect) Rect {
+	if a.Width <= 0 || a.Height <= 0 {
+		return b
+	}
+	if b.Width <= 0 || b.Height <= 0 {
+		return a
+	}
+	x0 := max(a.X, b.X)
+	y0 := max(a.Y, b.Y)
+	x1 := min(a.X+a.Width, b.X+b.Width)
+	y1 := min(a.Y+a.Height, b.Y+b.Height)
+	if x1 < x0 {
+		x1 = x0
+	}
+	if y1 < y0 {
+		y1 = y0
+	}
+	return Rect{X: x0, Y: y0, Width: x1 - x0, Height: y1 - y0}
 }
 
 func maxInt(a, b int) int {

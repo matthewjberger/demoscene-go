@@ -30,7 +30,14 @@ func InteractionSystem(world *ecs.World) {
 	bestArea := float32(0)
 	world.ForEach(mask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
 		node, _ := ecs.Get[Node](world, entity)
+		if node.HiddenResolved {
+			return
+		}
 		if !node.Resolved.Contains(pointer.X, pointer.Y) {
+			return
+		}
+		if node.ClipResolved.Width > 0 && node.ClipResolved.Height > 0 &&
+			!node.ClipResolved.Contains(pointer.X, pointer.Y) {
 			return
 		}
 

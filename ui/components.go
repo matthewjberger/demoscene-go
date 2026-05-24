@@ -33,9 +33,16 @@ type Node struct {
 	Layout        LayoutMode
 	Grow          float32
 	ZIndex        int32
-	Clip          Rect
-	Resolved      Rect
-	Dirty         bool
+	// Hidden hides this node and its whole subtree. ClipChildren confines
+	// descendant rendering to this node's resolved rect.
+	Hidden       bool
+	ClipChildren bool
+	// Resolved, HiddenResolved and ClipResolved are computed by LayoutSystem;
+	// do not set them directly.
+	Resolved       Rect
+	ClipResolved   Rect
+	HiddenResolved bool
+	Dirty          bool
 }
 
 type Rect struct {
@@ -78,6 +85,20 @@ type TextInput struct {
 type TextCommitted struct {
 	Entity ecs.Entity
 	Value  string
+}
+
+// SetVisible shows or hides a node and its whole subtree. It marks layout dirty
+// only when the state actually changes, so it is cheap to call every frame.
+func SetVisible(world *ecs.World, entity ecs.Entity, visible bool) {
+	node, ok := ecs.GetMut[Node](world, entity)
+	if !ok {
+		return
+	}
+	if node.Hidden == !visible {
+		return
+	}
+	node.Hidden = !visible
+	MarkLayoutDirty(world)
 }
 
 func Register(world *ecs.World) {

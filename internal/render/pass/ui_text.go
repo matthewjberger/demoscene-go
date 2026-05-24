@@ -14,13 +14,14 @@ import (
 //go:embed ui_text.wgsl
 var uiTextShader string
 
-const uiTextGlyphBytes = uint64(48)
+const uiTextGlyphBytes = uint64(64)
 const uiTextMinCapacity uint32 = 256
 
 type uiTextGlyphInstance struct {
 	Rect  [4]float32
 	Color [4]float32
 	Atlas [4]float32
+	Clip  [4]float32
 }
 
 type uiTextPassState struct {
@@ -237,7 +238,7 @@ func uiTextPrepare(state *uiTextPassState, context *render.PassContext) error {
 		texts, _ := ecs.Column[ui.Text](uiWorld, table)
 		node := &nodes[index]
 		text := &texts[index]
-		if text.Content == "" || !visibleInClip(node) {
+		if node.HiddenResolved || text.Content == "" || !visibleInClip(node) {
 			return
 		}
 		scale := text.Scale
@@ -256,6 +257,7 @@ func uiTextPrepare(state *uiTextPassState, context *render.PassContext) error {
 			return
 		}
 
+		clip := [4]float32{node.ClipResolved.X, node.ClipResolved.Y, node.ClipResolved.Width, node.ClipResolved.Height}
 		startIdx := len(state.scratch)
 		cursor := originX
 		for _, r := range text.Content {
@@ -275,6 +277,7 @@ func uiTextPrepare(state *uiTextPassState, context *render.PassContext) error {
 				Rect:  [4]float32{cursor, originY, glyphW, glyphH},
 				Color: text.Color,
 				Atlas: [4]float32{atlasX, cellW, cellW, atlasWidth},
+				Clip:  clip,
 			})
 			cursor += advance
 		}
@@ -340,7 +343,7 @@ func collectOpaqueQuads(uiWorld *ecs.World) []opaqueQuad {
 		colors, _ := ecs.Column[ui.Color](uiWorld, table)
 		node := &nodes[index]
 		color := &colors[index]
-		if color.RGBA[3] < 0.999 {
+		if node.HiddenResolved || color.RGBA[3] < 0.999 {
 			return
 		}
 		if node.Resolved.Width <= 0 || node.Resolved.Height <= 0 {
