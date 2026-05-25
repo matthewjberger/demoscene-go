@@ -68,7 +68,6 @@ type shadowDepthPassState struct {
 	skinnedPipeline       *wgpu.RenderPipeline
 	skinnedHandleBgLayout *wgpu.BindGroupLayout
 	skinnedJointBindCache map[ecs.Entity]*shadowSkinnedEntry
-	instancedBindCache    map[ecs.Entity]*shadowInstancedEntry
 }
 
 type shadowSkinnedEntry struct {
@@ -87,12 +86,6 @@ type skinnedShadowParams struct {
 	MorphDisplacementOffset uint32
 	MorphVertexCount        uint32
 	MorphWeights            [8]float32
-}
-
-type shadowInstancedEntry struct {
-	bindGroup   *wgpu.BindGroup
-	generation  uint64
-	worldBuffer *wgpu.Buffer
 }
 
 func NewShadow(device *wgpu.Device) (*Shadow, error) {
@@ -363,7 +356,6 @@ func NewShadowDepthPass(device *wgpu.Device, shadow *Shadow) (*render.Pass, erro
 	}
 	state.skinnedHandleBgLayout = skinnedHandleBgLayout
 	state.skinnedJointBindCache = make(map[ecs.Entity]*shadowSkinnedEntry)
-	state.instancedBindCache = make(map[ecs.Entity]*shadowInstancedEntry)
 
 	skinnedShader, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
 		Label:          "skinned_shadow_depth shader",
@@ -694,57 +686,6 @@ func shadowDepthExecute(state *shadowDepthPassState, context *render.PassContext
 			pass.Draw(entry.VertexCount, uint32(len(bucket.slotEntity)), 0, 0)
 		}
 
-		if instancedRes, ok := ecs.Resource[InstancedComputeResource](context.World); ok && instancedRes != nil && instancedRes.Compute != nil {
-			compute := instancedRes.Compute
-			instancedMask := ecs.MustMaskOf[asset.InstancedMesh](context.World)
-			var instErr error
-			context.World.ForEach(instancedMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
-				if instErr != nil {
-					return
-				}
-				inst, _ := ecs.Get[asset.InstancedMesh](context.World, entity)
-				if inst == nil {
-					return
-				}
-				worldBuffer := compute.WorldBuffer(entity)
-				count := compute.InstanceCount(entity)
-				if worldBuffer == nil || count == 0 {
-					return
-				}
-				entry, ok := assets.Lookup(inst.Mesh)
-				if !ok {
-					return
-				}
-				generation := compute.Generation(entity)
-				cached := state.instancedBindCache[entity]
-				if cached != nil && (cached.generation != generation || cached.worldBuffer != worldBuffer) {
-					cached.bindGroup.Release()
-					cached = nil
-				}
-				if cached == nil {
-					bg, err := context.Device.CreateBindGroup(&wgpu.BindGroupDescriptor{
-						Label:   "shadow instanced handle bg",
-						Layout:  state.handleBgLayout,
-						Entries: []wgpu.BindGroupEntry{{Binding: 0, Buffer: worldBuffer, Offset: 0, Size: wgpu.WholeSize}},
-					})
-					if err != nil {
-						instErr = err
-						return
-					}
-					cached = &shadowInstancedEntry{bindGroup: bg, generation: generation, worldBuffer: worldBuffer}
-					state.instancedBindCache[entity] = cached
-				}
-				pass.SetBindGroup(1, cached.bindGroup, nil)
-				pass.SetVertexBuffer(0, entry.Vertices, 0, wgpu.WholeSize)
-				pass.Draw(entry.VertexCount, count, 0, 0)
-			})
-			if instErr != nil {
-				pass.End()
-				pass.Release()
-				return instErr
-			}
-		}
-
 		if skinnedReady {
 			pass.SetPipeline(state.skinnedPipeline)
 			pass.SetBindGroup(0, state.cascadeBgs[cascade], nil)
@@ -799,12 +740,6 @@ func shadowDepthRelease(state *shadowDepthPassState) {
 		}
 	}
 	state.skinnedJointBindCache = nil
-	for _, entry := range state.instancedBindCache {
-		if entry != nil && entry.bindGroup != nil {
-			entry.bindGroup.Release()
-		}
-	}
-	state.instancedBindCache = nil
 	if state.handleBgLayout != nil {
 		state.handleBgLayout.Release()
 	}

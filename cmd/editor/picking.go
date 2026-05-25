@@ -123,7 +123,6 @@ func findEntityByID(engine *ecs.World, id uint32) (ecs.Entity, bool) {
 	}
 	scan(ecs.MustMaskOf[asset.RenderMesh](engine))
 	scan(ecs.MustMaskOf[asset.SkinnedMesh](engine))
-	scan(ecs.MustMaskOf[asset.InstancedMesh](engine))
 	return picked, found
 }
 

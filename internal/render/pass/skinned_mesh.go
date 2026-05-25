@@ -5,21 +5,11 @@ import (
 	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
-	"github.com/go-gl/mathgl/mgl32"
 
 	"github.com/matthewjberger/indigo/ecs"
 	"github.com/matthewjberger/indigo/render"
 	"github.com/matthewjberger/indigo/render/asset"
-	"github.com/matthewjberger/indigo/transform"
 )
-
-// skinnedUniforms is retained for the instanced mesh pass, which still uses the
-// lightweight directional-light model.
-type skinnedUniforms struct {
-	LightDirection mgl32.Vec4
-	LightColor     mgl32.Vec4
-	AmbientColor   mgl32.Vec4
-}
 
 // skinnedMeshPassState renders opaque and masked skinned meshes with the same
 // full PBR path as the static mesh pass. It reuses that pass's view-proj, global
@@ -288,35 +278,5 @@ func skinnedMeshRelease(state *skinnedMeshPassState) {
 	}
 	if state.handleLayout != nil {
 		state.handleLayout.Release()
-	}
-}
-
-func applyDirectionalToSkinned(world *ecs.World, uniforms *skinnedUniforms) {
-	lightMask := ecs.MustMaskOf[render.Light](world)
-	world.ForEach(lightMask, 0, func(entity ecs.Entity, _ *ecs.Archetype, _ int) {
-		light, ok := ecs.Get[render.Light](world, entity)
-		if !ok || light.Type != render.LightTypeDirectional {
-			return
-		}
-		intensity := light.Intensity
-		if intensity <= 0 {
-			intensity = 1.0
-		}
-		uniforms.LightColor = mgl32.Vec4{light.Color[0] * intensity, light.Color[1] * intensity, light.Color[2] * intensity, 1}
-		if global, ok := ecs.Get[transform.GlobalTransform](world, entity); ok {
-			forward := mgl32.Vec3{-global.Matrix[8], -global.Matrix[9], -global.Matrix[10]}
-			if forward.Len() > 1e-4 {
-				forward = forward.Normalize()
-				uniforms.LightDirection = mgl32.Vec4{forward[0], forward[1], forward[2], 0}
-			}
-		}
-	})
-}
-
-func defaultSkinnedUniforms() skinnedUniforms {
-	return skinnedUniforms{
-		LightDirection: mgl32.Vec4{0, -1, 0, 0},
-		LightColor:     mgl32.Vec4{1, 1, 1, 1},
-		AmbientColor:   mgl32.Vec4{0.15, 0.18, 0.22, 1},
 	}
 }

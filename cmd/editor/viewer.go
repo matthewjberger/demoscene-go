@@ -86,9 +86,6 @@ func frameCameraOnRoots(engine *ecs.World, roots []ecs.Entity) {
 		if mesh, ok := ecs.Get[asset.RenderMesh](engine, entity); ok {
 			accumulate(entity, meshAssets.Bounds(mesh.Mesh))
 		}
-		if mesh, ok := ecs.Get[asset.InstancedMesh](engine, entity); ok {
-			accumulate(entity, meshAssets.Bounds(mesh.Mesh))
-		}
 		if mesh, ok := ecs.Get[asset.SkinnedMesh](engine, entity); ok {
 			if entry, ok := skinnedAssets.Lookup(mesh.Mesh); ok {
 				accumulate(entity, entry.Bounds)

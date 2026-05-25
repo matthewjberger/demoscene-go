@@ -87,11 +87,6 @@ func editorApp() *app.App {
 				log.Fatal(err)
 			}
 			ecs.SetResource(world, pass.SkinningComputeResource{Compute: skinning})
-			instanced, err := pass.NewInstancedCompute(renderer.Device)
-			if err != nil {
-				log.Fatal(err)
-			}
-			ecs.SetResource(world, pass.InstancedComputeResource{Compute: instanced})
 
 			arrays := ecs.MustResource[asset.MaterialTextureArraysResource](world).Arrays
 			registry := ecs.MustResource[asset.MaterialRegistryResource](world).Registry
@@ -108,7 +103,6 @@ func editorApp() *app.App {
 				add  func() error
 			}{
 				{"skinning_compute", func() error { _, err := pass.AddSkinningComputePass(renderer, skinning); return err }},
-				{"instanced_compute", func() error { _, err := pass.AddInstancedComputePass(renderer, instanced); return err }},
 				{"sky", func() error { _, err := pass.AddSkyPass(renderer); return err }},
 				{"shadow_depth", func() error { _, err := pass.AddShadowDepthPass(renderer, shadow); return err }},
 				{"spot_shadow", func() error { _, err := pass.AddSpotShadowPass(renderer, spotShadow); return err }},
@@ -118,7 +112,6 @@ func editorApp() *app.App {
 					return err
 				}},
 				{"skinned_mesh", func() error { _, err := pass.AddSkinnedMeshPass(renderer); return err }},
-				{"instanced_mesh", func() error { _, err := pass.AddInstancedMeshPass(renderer); return err }},
 				{"pick_proxy", func() error { _, err := pass.AddPickProxyPass(renderer); return err }},
 				{"picking", func() error { _, err := pass.AddPickingPass(renderer); return err }},
 				{"selection_mask", func() error { _, err := pass.AddSelectionMaskPass(renderer); return err }},

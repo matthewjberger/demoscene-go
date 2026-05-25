@@ -101,7 +101,7 @@ type SceneNode struct {
 	HasSkinnedMesh    bool
 	ChildSkinnedPrims []SceneNodeSkinnedPrimitive
 
-	Instances []mgl32.Mat4
+	Instances []transform.LocalTransform
 }
 
 type SceneNodeSkinnedPrimitive struct {
@@ -339,7 +339,6 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene, device *wgpu.Device)
 	parentMask := ecs.MustMaskOf[transform.Parent](world)
 	groupRootMask := ecs.MustMaskOf[transform.GroupRoot](world)
 	meshMask := ecs.MustMaskOf[RenderMesh](world)
-	instancedMeshMask := ecs.MustMaskOf[InstancedMesh](world)
 	skinnedMeshMask := ecs.MustMaskOf[SkinnedMesh](world)
 	materialMask := ecs.MustMaskOf[Material](world)
 	morphMask := ecs.MustMaskOf[MorphWeights](world)
@@ -373,9 +372,18 @@ func SpawnLoadedScene(world *ecs.World, scene *LoadedScene, device *wgpu.Device)
 		}
 		ecs.Set(world, entity, local)
 		if node.HasMesh && len(node.Instances) > 0 {
-			world.AddComponents(entity, instancedMeshMask|materialMask)
-			ecs.Set(world, entity, InstancedMesh{Mesh: node.Mesh, Instances: node.Instances})
-			ecs.Set(world, entity, node.Material)
+			// Expand EXT_mesh_gpu_instancing into individual mesh children so
+			// instances render through the full PBR path (lighting, textures,
+			// single-sided culling) instead of a separate flat shader. Raw T/R/S
+			// keeps any mirror scale so flip_winding still applies per instance.
+			for _, instance := range node.Instances {
+				child := world.Spawn(transformMask | parentMask | meshMask | materialMask)
+				ecs.Set(world, child, instance)
+				ecs.Set(world, child, transform.IdentityGlobalTransform())
+				ecs.Set(world, child, transform.Parent{Entity: entity})
+				ecs.Set(world, child, RenderMesh{Mesh: node.Mesh})
+				ecs.Set(world, child, node.Material)
+			}
 		} else if node.HasMesh {
 			world.AddComponents(entity, meshMask|materialMask)
 			ecs.Set(world, entity, RenderMesh{Mesh: node.Mesh})
@@ -699,7 +707,7 @@ func readNodeLightIndex(ext gltf.Extensions) int {
 	return decoded.Light
 }
 
-func readNodeInstances(doc *gltf.Document, node *gltf.Node) []mgl32.Mat4 {
+func readNodeInstances(doc *gltf.Document, node *gltf.Node) []transform.LocalTransform {
 	if node == nil || node.Extensions == nil {
 		return nil
 	}
@@ -748,7 +756,7 @@ func readNodeInstances(doc *gltf.Document, node *gltf.Node) []mgl32.Mat4 {
 		return nil
 	}
 
-	out := make([]mgl32.Mat4, count)
+	out := make([]transform.LocalTransform, count)
 	for index := 0; index < count; index++ {
 		translation := mgl32.Vec3{0, 0, 0}
 		if index < len(translations) {
@@ -763,9 +771,11 @@ func readNodeInstances(doc *gltf.Document, node *gltf.Node) []mgl32.Mat4 {
 			q := rotations[index]
 			rotation = mgl32.Quat{W: q[3], V: mgl32.Vec3{q[0], q[1], q[2]}}
 		}
-		out[index] = mgl32.Translate3D(translation[0], translation[1], translation[2]).
-			Mul4(rotation.Mat4()).
-			Mul4(mgl32.Scale3D(scale[0], scale[1], scale[2]))
+		out[index] = transform.LocalTransform{
+			Translation: transform.Vec3{translation[0], translation[1], translation[2]},
+			Rotation:    transform.Quat(rotation),
+			Scale:       transform.Vec3{scale[0], scale[1], scale[2]},
+		}
 	}
 	return out
 }
