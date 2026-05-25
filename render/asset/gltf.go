@@ -947,11 +947,11 @@ func buildMaterial(src *gltf.Material, textureLayers []uint32) Material {
 		out.RoughnessFactor = float32(pbr.RoughnessFactorOrDefault())
 		if pbr.BaseColorTexture != nil {
 			out.BaseColorLayer = textureLayers[pbr.BaseColorTexture.Index]
-			out.BaseTransform = readTexTransform(pbr.BaseColorTexture.Extensions)
+			out.BaseTransform = readTexTransform(pbr.BaseColorTexture.TexCoord, pbr.BaseColorTexture.Extensions)
 		}
 		if pbr.MetallicRoughnessTexture != nil {
 			out.MetallicRoughnessLayer = textureLayers[pbr.MetallicRoughnessTexture.Index]
-			out.MetallicRoughnessTransform = readTexTransform(pbr.MetallicRoughnessTexture.Extensions)
+			out.MetallicRoughnessTransform = readTexTransform(pbr.MetallicRoughnessTexture.TexCoord, pbr.MetallicRoughnessTexture.Extensions)
 		}
 	}
 	if src.NormalTexture != nil {
@@ -959,18 +959,18 @@ func buildMaterial(src *gltf.Material, textureLayers []uint32) Material {
 			out.NormalLayer = textureLayers[*src.NormalTexture.Index]
 		}
 		out.NormalScale = float32(src.NormalTexture.ScaleOrDefault())
-		out.NormalTransform = readTexTransform(src.NormalTexture.Extensions)
+		out.NormalTransform = readTexTransform(src.NormalTexture.TexCoord, src.NormalTexture.Extensions)
 	}
 	if src.OcclusionTexture != nil {
 		if src.OcclusionTexture.Index != nil {
 			out.OcclusionLayer = textureLayers[*src.OcclusionTexture.Index]
 		}
 		out.OcclusionStrength = float32(src.OcclusionTexture.StrengthOrDefault())
-		out.OcclusionTransform = readTexTransform(src.OcclusionTexture.Extensions)
+		out.OcclusionTransform = readTexTransform(src.OcclusionTexture.TexCoord, src.OcclusionTexture.Extensions)
 	}
 	if src.EmissiveTexture != nil {
 		out.EmissiveLayer = textureLayers[src.EmissiveTexture.Index]
-		out.EmissiveTransform = readTexTransform(src.EmissiveTexture.Extensions)
+		out.EmissiveTransform = readTexTransform(src.EmissiveTexture.TexCoord, src.EmissiveTexture.Extensions)
 	}
 	readMaterialExtensions(src.Extensions, &out, textureLayers)
 	if src.EmissiveFactor != [3]float64{} {
@@ -1042,8 +1042,9 @@ func extTexTransform(info *extTexInfo) TextureTransform {
 	return transform
 }
 
-func readTexTransform(ext gltf.Extensions) TextureTransform {
+func readTexTransform(texCoord int, ext gltf.Extensions) TextureTransform {
 	transform := IdentityTextureTransform()
+	transform.UVSet = uint32(texCoord)
 	if ext == nil {
 		return transform
 	}
