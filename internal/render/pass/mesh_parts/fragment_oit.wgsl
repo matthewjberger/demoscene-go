@@ -63,6 +63,9 @@ fn fragment_main(in: VertexOutput) -> OitOutput {
     if (mat.alpha_mode != 2u && mat.transmission_factor <= 0.0) {
         discard;
     }
+    if (mat.alpha_mode == 1u && base_color.a < mat.alpha_cutoff) {
+        discard;
+    }
     if (mat.transmission_factor <= 0.0 && base_color.a < 0.0039) {
         discard;
     }
