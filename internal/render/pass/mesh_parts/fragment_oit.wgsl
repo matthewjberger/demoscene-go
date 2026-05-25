@@ -17,8 +17,12 @@ fn oit_output(color: vec3<f32>, alpha: f32, view_z: f32, entity_id: u32) -> OitO
     return out;
 }
 @fragment
-fn fragment_main(in: VertexOutput) -> OitOutput {
+fn fragment_main(in: VertexOutput, @builtin(front_facing) front_facing: bool) -> OitOutput {
     let mat = materials[in.material_index];
+    let geometric_front = front_facing != (in.flip_winding != 0u);
+    if (mat.double_sided == 0u && !geometric_front) {
+        discard;
+    }
 
     let view_dir = normalize(cluster_uniforms.camera_position.xyz - in.world_pos);
 
@@ -298,8 +302,12 @@ fn fragment_main(in: VertexOutput) -> OitOutput {
     return oit_output(color, alpha, view_depth, in.entity_id);
 }
 @fragment
-fn fs_blend_opaque_prepass(in: VertexOutput) {
+fn fs_blend_opaque_prepass(in: VertexOutput, @builtin(front_facing) front_facing: bool) {
     let mat = materials[in.material_index];
+    let geometric_front = front_facing != (in.flip_winding != 0u);
+    if (mat.double_sided == 0u && !geometric_front) {
+        discard;
+    }
     if (mat.alpha_mode != 2u && mat.transmission_factor <= 0.0) {
         discard;
     }

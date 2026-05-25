@@ -83,5 +83,9 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32,
     let view_mat3 = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);
     out.view_normal = view_mat3 * skinned_normal;
     out.world_scale_factor = inst.world_scale_factor;
+    // Skinning bakes the transform into the joint matrices (no single model
+    // matrix), so winding can't be derived here; skinned meshes are virtually
+    // never mirror-scaled, so treat them as non-flipped.
+    out.flip_winding = 0u;
     return out;
 }

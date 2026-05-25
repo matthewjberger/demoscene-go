@@ -12,7 +12,11 @@ import (
 )
 
 //go:embed mesh_depth_prepass.wgsl
-var meshDepthPrepassShader string
+var meshDepthPrepassBody string
+
+// meshDepthPrepassShader composes the shared material struct with the prepass
+// body so the material layout is defined in exactly one place.
+var meshDepthPrepassShader = composeShader(shaderMaterialStruct, meshDepthPrepassBody)
 
 type depthPrepass struct {
 	pipeline   *wgpu.RenderPipeline

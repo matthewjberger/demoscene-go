@@ -51,5 +51,7 @@ fn vertex_main(input: VertexInput, @builtin(instance_index) instance_index: u32,
     let view_mat3 = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);
     out.view_normal = view_mat3 * out.world_normal;
     out.world_scale_factor = (length(model[0].xyz) + length(model[1].xyz) + length(model[2].xyz)) / 3.0;
+    let model_det = dot(model[0].xyz, cross(model[1].xyz, model[2].xyz));
+    out.flip_winding = select(0u, 1u, model_det < 0.0);
     return out;
 }

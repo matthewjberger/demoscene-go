@@ -4,8 +4,12 @@ struct FragmentOutput {
     @location(2) view_normal:  vec4<f32>,
 };
 @fragment
-fn fragment_main(in: VertexOutput) -> FragmentOutput {
+fn fragment_main(in: VertexOutput, @builtin(front_facing) front_facing: bool) -> FragmentOutput {
     let mat = materials[in.material_index];
+    let geometric_front = front_facing != (in.flip_winding != 0u);
+    if (mat.double_sided == 0u && !geometric_front) {
+        discard;
+    }
 
     let view_dir = normalize(cluster_uniforms.camera_position.xyz - in.world_pos);
 

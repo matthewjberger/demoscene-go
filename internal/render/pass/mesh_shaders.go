@@ -9,6 +9,13 @@ import _ "embed"
 // fragment variant (forward vs OIT). This mirrors nightshade's naga_oil module
 // composition, adapted to Go's lack of a WGSL preprocessor.
 
+// shaderMaterialStruct is the single source of truth for the GPU material
+// layout, composed first into every shader that reads the material registry
+// (forward/OIT and the depth prepass) so the struct is defined exactly once.
+//
+//go:embed mesh_parts/material_struct.wgsl
+var shaderMaterialStruct string
+
 //go:embed mesh_parts/common.wgsl
 var shaderCommon string
 
@@ -33,8 +40,8 @@ func composeShader(parts ...string) string {
 }
 
 var (
-	meshShader           = composeShader(shaderCommon, shaderVertexStatic, shaderFragmentForward)
-	meshOitShader        = composeShader(shaderCommon, shaderVertexStatic, shaderFragmentOit)
-	skinnedMeshShader    = composeShader(shaderCommon, shaderVertexSkinned, shaderFragmentForward)
-	skinnedMeshOitShader = composeShader(shaderCommon, shaderVertexSkinned, shaderFragmentOit)
+	meshShader           = composeShader(shaderMaterialStruct, shaderCommon, shaderVertexStatic, shaderFragmentForward)
+	meshOitShader        = composeShader(shaderMaterialStruct, shaderCommon, shaderVertexStatic, shaderFragmentOit)
+	skinnedMeshShader    = composeShader(shaderMaterialStruct, shaderCommon, shaderVertexSkinned, shaderFragmentForward)
+	skinnedMeshOitShader = composeShader(shaderMaterialStruct, shaderCommon, shaderVertexSkinned, shaderFragmentOit)
 )
