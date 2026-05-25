@@ -556,16 +556,21 @@ func fitLightFrustum(corners [8]mgl32.Vec3, lightDir mgl32.Vec3) (mgl32.Mat4, fl
 	maxX += pad
 	minY -= pad
 	maxY += pad
-	extent := maxX - minX
-	if (maxY - minY) > extent {
-		extent = maxY - minY
+	// Extend the depth range multiplicatively (port of nightshade's cascade.rs)
+	// so casters between the light and the frustum slice aren't clipped by the
+	// near plane. An additive pad left the near plane too tight, clipping tall
+	// or enclosing geometry (e.g. VirtualCity's dome) into wrong shadows.
+	const zMult float32 = 10.0
+	if minZ < 0 {
+		minZ *= zMult
+	} else {
+		minZ /= zMult
 	}
-	zPad := extent * 0.5
-	if zPad < 10.0 {
-		zPad = 10.0
+	if maxZ < 0 {
+		maxZ /= zMult
+	} else {
+		maxZ *= zMult
 	}
-	minZ -= zPad
-	maxZ += zPad
 	lightProj := orthoZO(minX, maxX, minY, maxY, -maxZ, -minZ)
 	largest := maxX - minX
 	if (maxY - minY) > largest {
