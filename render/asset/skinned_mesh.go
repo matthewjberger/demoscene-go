@@ -124,15 +124,14 @@ func (assets *SkinnedMeshAssets) Register(device *wgpu.Device, name string, vert
 	if len(vertices) == 0 {
 		return 0, fmt.Errorf("skinned mesh %q: empty vertex slice", name)
 	}
-	buffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
-		Label: "skinned mesh vertex buffer: " + name,
-		Size:  uint64(len(vertices)) * uint64(unsafe.Sizeof(SkinnedMeshVertex{})),
-		Usage: wgpu.BufferUsageVertex | wgpu.BufferUsageCopyDst,
+	buffer, err := device.CreateBufferInit(&wgpu.BufferInitDescriptor{
+		Label:    "skinned mesh vertex buffer: " + name,
+		Contents: wgpu.ToBytes(vertices),
+		Usage:    wgpu.BufferUsageVertex,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("skinned mesh %q: buffer: %w", name, err)
 	}
-	device.GetQueue().WriteBuffer(buffer, 0, unsafe.Slice((*byte)(unsafe.Pointer(&vertices[0])), len(vertices)*int(unsafe.Sizeof(SkinnedMeshVertex{}))))
 	cpu := make([]SkinnedMeshVertex, len(vertices))
 	copy(cpu, vertices)
 	bounds := computeSkinnedBounds(cpu)
