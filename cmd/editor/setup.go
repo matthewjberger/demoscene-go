@@ -120,6 +120,7 @@ func editorApp() *app.App {
 				{"selection_mask", func() error { _, err := pass.AddSelectionMaskPass(renderer); return err }},
 				{"grid", func() error { _, err := pass.AddGridPass(renderer); return err }},
 				{"lines", func() error { _, err := pass.AddLinesPass(renderer); return err }},
+				{"particles", func() error { _, _, err := pass.AddParticlePasses(renderer, renderer.AspectRatio); return err }},
 				{"outline", func() error { _, err := pass.AddOutlinePass(renderer); return err }},
 				{"ssao", func() error { _, _, err := pass.AddSsaoPass(renderer, renderer.AspectRatio); return err }},
 				{"ssr", func() error { _, _, err := pass.AddSsrPass(renderer, renderer.AspectRatio); return err }},

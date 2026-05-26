@@ -28,6 +28,7 @@ func NewEngineWorld(renderer *render.Renderer) (*ecs.World, error) {
 	ecs.Register[asset.MorphWeights](engine)
 	ecs.Register[asset.AnimationPlayer](engine)
 	ecs.Register[render.Light](engine)
+	ecs.Register[render.ParticleEmitter](engine)
 	ecs.Register[render.CameraMarker](engine)
 	ecs.Register[render.PickProxy](engine)
 	ecs.Register[render.Selected](engine)
