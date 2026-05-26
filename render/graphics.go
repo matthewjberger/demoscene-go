@@ -12,6 +12,10 @@ type Graphics struct {
 	ShowNormals   bool
 	ShowSkeletons bool
 
+	// HdriLoaded switches the sky pass from the procedural sky to sampling the
+	// IBL environment cubemap, set once a Poly Haven HDRI has been baked in.
+	HdriLoaded bool
+
 	ViewerMode bool
 
 	// GlobalUnlit renders every lit material as unlit (albedo + emissive).

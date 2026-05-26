@@ -4,13 +4,19 @@ struct Uniform {
     view: mat4x4<f32>,
     cam_pos: vec4<f32>,
     time: f32,
-    _pad0: f32,
+    hdr_loaded: f32,
     _pad1: f32,
     _pad2: f32,
 };
 
 @group(0) @binding(0)
 var<uniform> u: Uniform;
+
+@group(0) @binding(1)
+var env_cubemap: texture_cube<f32>;
+
+@group(0) @binding(2)
+var env_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -163,6 +169,12 @@ fn apply_clouds(base: vec3<f32>, dir: vec3<f32>, sun_direction: vec3<f32>, time:
 @fragment
 fn fs_sky(in: VertexOutput) -> @location(0) vec4<f32> {
     let dir = normalize(in.world_dir);
+
+    if (u.hdr_loaded > 0.5) {
+        var hdr = textureSample(env_cubemap, env_sampler, dir).rgb;
+        hdr = clamp(hdr, vec3<f32>(0.0), vec3<f32>(65000.0));
+        return vec4<f32>(hdr, 1.0);
+    }
 
     let sky_top_color = vec3<f32>(0.385, 0.454, 0.55);
     let sky_horizon_color = vec3<f32>(0.646, 0.656, 0.67);

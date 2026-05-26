@@ -16,14 +16,14 @@ import (
 var skyShader string
 
 type skyUniform struct {
-	Proj    [16]float32
-	ProjInv [16]float32
-	View    [16]float32
-	CamPos  [4]float32
-	Time    float32
-	Pad0    float32
-	Pad1    float32
-	Pad2    float32
+	Proj      [16]float32
+	ProjInv   [16]float32
+	View      [16]float32
+	CamPos    [4]float32
+	Time      float32
+	HdrLoaded float32
+	Pad1      float32
+	Pad2      float32
 }
 
 type skyPassState struct {
@@ -34,16 +34,31 @@ type skyPassState struct {
 	aspectFn        func() float32
 }
 
-func NewSkyPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect func() float32) (*render.Pass, error) {
+func NewSkyPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect func() float32, ibl *IBL) (*render.Pass, error) {
 	state := &skyPassState{aspectFn: aspect}
 
 	bindGroupLayout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
 		Label: "sky bind group layout",
-		Entries: []wgpu.BindGroupLayoutEntry{{
-			Binding:    0,
-			Visibility: wgpu.ShaderStageVertex | wgpu.ShaderStageFragment,
-			Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeUniform},
-		}},
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{
+				Binding:    0,
+				Visibility: wgpu.ShaderStageVertex | wgpu.ShaderStageFragment,
+				Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeUniform},
+			},
+			{
+				Binding:    1,
+				Visibility: wgpu.ShaderStageFragment,
+				Texture: wgpu.TextureBindingLayout{
+					SampleType:    wgpu.TextureSampleTypeFloat,
+					ViewDimension: wgpu.TextureViewDimensionCube,
+				},
+			},
+			{
+				Binding:    2,
+				Visibility: wgpu.ShaderStageFragment,
+				Sampler:    wgpu.SamplerBindingLayout{Type: wgpu.SamplerBindingTypeFiltering},
+			},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sky pass: bind group layout: %w", err)
@@ -63,12 +78,16 @@ func NewSkyPass(device *wgpu.Device, surfaceFormat wgpu.TextureFormat, aspect fu
 	bindGroup, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
 		Label:  "sky bind group",
 		Layout: bindGroupLayout,
-		Entries: []wgpu.BindGroupEntry{{
-			Binding: 0,
-			Buffer:  uniformBuffer,
-			Offset:  0,
-			Size:    uint64(unsafe.Sizeof(skyUniform{})),
-		}},
+		Entries: []wgpu.BindGroupEntry{
+			{
+				Binding: 0,
+				Buffer:  uniformBuffer,
+				Offset:  0,
+				Size:    uint64(unsafe.Sizeof(skyUniform{})),
+			},
+			{Binding: 1, TextureView: ibl.CubemapView},
+			{Binding: 2, Sampler: ibl.Sampler},
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sky pass: bind group: %w", err)
@@ -141,12 +160,17 @@ func skyPrepare(state *skyPassState, context *render.PassContext) error {
 	projInv := proj.Inv()
 
 	uptime := ecs.MustResource[window.Window](context.World).Timing.UptimeSeconds
+	hdrLoaded := float32(0)
+	if ecs.MustResource[render.Graphics](context.World).HdriLoaded {
+		hdrLoaded = 1
+	}
 	uniform := skyUniform{
-		Proj:    proj,
-		ProjInv: projInv,
-		View:    view,
-		CamPos:  [4]float32{camera.Eye[0], camera.Eye[1], camera.Eye[2], 1.0},
-		Time:    uptime,
+		Proj:      proj,
+		ProjInv:   projInv,
+		View:      view,
+		CamPos:    [4]float32{camera.Eye[0], camera.Eye[1], camera.Eye[2], 1.0},
+		Time:      uptime,
+		HdrLoaded: hdrLoaded,
 	}
 	writeBuffer(context.Device, context.Queue, context.Encoder, state.uniformBuffer, 0, bytesOf(&uniform))
 	return nil

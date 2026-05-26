@@ -20,6 +20,9 @@ var cubemapMipgenShader string
 //go:embed filter_envmap.wgsl
 var filterEnvmapShader string
 
+//go:embed equirect_to_cubemap.wgsl
+var equirectToCubemapShader string
+
 const (
 	BrdfLutSize           uint32 = 256
 	IrradianceSize        uint32 = 64
@@ -144,6 +147,227 @@ func (ibl *IBL) Release() {
 	if ibl.BrdfLut != nil {
 		ibl.BrdfLut.Release()
 	}
+}
+
+type equirectUniform struct {
+	OutputSize uint32
+	Pad0       uint32
+	Pad1       uint32
+	Pad2       uint32
+}
+
+// LoadEquirect replaces the environment with an equirectangular HDRI. The
+// float16 RGBA pixels are uploaded, projected onto the existing cubemap, and
+// the irradiance and prefiltered maps are refiltered in place so the mesh and
+// sky bind groups keep referencing the same texture views.
+func (ibl *IBL) LoadEquirect(device *wgpu.Device, queue *wgpu.Queue, pixels []byte, width, height uint32) error {
+	if width == 0 || height == 0 {
+		return fmt.Errorf("ibl: equirect has zero dimension")
+	}
+	equirect, err := device.CreateTexture(&wgpu.TextureDescriptor{
+		Label: "hdri equirect",
+		Size: wgpu.Extent3D{
+			Width:              width,
+			Height:             height,
+			DepthOrArrayLayers: 1,
+		},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     wgpu.TextureDimension2D,
+		Format:        wgpu.TextureFormatRGBA16Float,
+		Usage:         wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopyDst,
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect texture: %w", err)
+	}
+	defer equirect.Release()
+
+	queue.WriteTexture(
+		&wgpu.ImageCopyTexture{
+			Texture:  equirect,
+			MipLevel: 0,
+			Origin:   wgpu.Origin3D{},
+			Aspect:   wgpu.TextureAspectAll,
+		},
+		pixels,
+		&wgpu.TextureDataLayout{
+			Offset:       0,
+			BytesPerRow:  width * 8,
+			RowsPerImage: height,
+		},
+		&wgpu.Extent3D{
+			Width:              width,
+			Height:             height,
+			DepthOrArrayLayers: 1,
+		},
+	)
+
+	if err := convertEquirectToCubemap(ibl, device, queue, equirect); err != nil {
+		return err
+	}
+	if err := generateCubemapMipmaps(ibl.Cubemap, device, queue); err != nil {
+		return err
+	}
+	if err := filterEnvironmentMap(ibl, device, queue); err != nil {
+		return err
+	}
+	return nil
+}
+
+func convertEquirectToCubemap(ibl *IBL, device *wgpu.Device, queue *wgpu.Queue, equirect *wgpu.Texture) error {
+	equirectView, err := equirect.CreateView(nil)
+	if err != nil {
+		return fmt.Errorf("ibl: equirect view: %w", err)
+	}
+	defer equirectView.Release()
+
+	storageView, err := ibl.Cubemap.CreateView(&wgpu.TextureViewDescriptor{
+		Label:           "equirect cubemap storage view (mip 0)",
+		Dimension:       wgpu.TextureViewDimension2DArray,
+		BaseMipLevel:    0,
+		MipLevelCount:   1,
+		BaseArrayLayer:  0,
+		ArrayLayerCount: 6,
+		Aspect:          wgpu.TextureAspectAll,
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect storage view: %w", err)
+	}
+	defer storageView.Release()
+
+	sampler, err := device.CreateSampler(&wgpu.SamplerDescriptor{
+		Label:         "equirect sampler",
+		AddressModeU:  wgpu.AddressModeRepeat,
+		AddressModeV:  wgpu.AddressModeClampToEdge,
+		AddressModeW:  wgpu.AddressModeClampToEdge,
+		MagFilter:     wgpu.FilterModeLinear,
+		MinFilter:     wgpu.FilterModeLinear,
+		MipmapFilter:  wgpu.MipmapFilterModeLinear,
+		MaxAnisotropy: 1,
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect sampler: %w", err)
+	}
+	defer sampler.Release()
+
+	uniformBuf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
+		Label: "equirect uniform",
+		Size:  uint64(unsafe.Sizeof(equirectUniform{})),
+		Usage: wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect uniform buffer: %w", err)
+	}
+	defer uniformBuf.Release()
+
+	uniform := equirectUniform{OutputSize: ProceduralCubemapSize}
+	writeBufferStandalone(device, queue, uniformBuf, 0, bytesOf(&uniform))
+
+	layout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
+		Label: "equirect to cubemap bgl",
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{
+				Binding:    0,
+				Visibility: wgpu.ShaderStageCompute,
+				Buffer:     wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeUniform},
+			},
+			{
+				Binding:    1,
+				Visibility: wgpu.ShaderStageCompute,
+				Texture: wgpu.TextureBindingLayout{
+					SampleType:    wgpu.TextureSampleTypeFloat,
+					ViewDimension: wgpu.TextureViewDimension2D,
+				},
+			},
+			{
+				Binding:    2,
+				Visibility: wgpu.ShaderStageCompute,
+				Sampler:    wgpu.SamplerBindingLayout{Type: wgpu.SamplerBindingTypeFiltering},
+			},
+			{
+				Binding:    3,
+				Visibility: wgpu.ShaderStageCompute,
+				StorageTexture: wgpu.StorageTextureBindingLayout{
+					Access:        wgpu.StorageTextureAccessWriteOnly,
+					Format:        wgpu.TextureFormatRGBA16Float,
+					ViewDimension: wgpu.TextureViewDimension2DArray,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect bgl: %w", err)
+	}
+	defer layout.Release()
+
+	bindGroup, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
+		Label:  "equirect to cubemap bind group",
+		Layout: layout,
+		Entries: []wgpu.BindGroupEntry{
+			{Binding: 0, Buffer: uniformBuf, Offset: 0, Size: uint64(unsafe.Sizeof(uniform))},
+			{Binding: 1, TextureView: equirectView},
+			{Binding: 2, Sampler: sampler},
+			{Binding: 3, TextureView: storageView},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect bind group: %w", err)
+	}
+	defer bindGroup.Release()
+
+	shader, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
+		Label:          "equirect to cubemap shader",
+		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{Code: equirectToCubemapShader},
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect shader: %w", err)
+	}
+	defer shader.Release()
+
+	pipelineLayout, err := device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
+		Label:            "equirect to cubemap pipeline layout",
+		BindGroupLayouts: []*wgpu.BindGroupLayout{layout},
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect pipeline layout: %w", err)
+	}
+	defer pipelineLayout.Release()
+
+	pipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
+		Layout: pipelineLayout,
+		Compute: wgpu.ProgrammableStageDescriptor{
+			Module:     shader,
+			EntryPoint: "main",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect pipeline: %w", err)
+	}
+	defer pipeline.Release()
+
+	encoder, err := device.CreateCommandEncoder(&wgpu.CommandEncoderDescriptor{
+		Label: "equirect to cubemap encoder",
+	})
+	if err != nil {
+		return fmt.Errorf("ibl: equirect encoder: %w", err)
+	}
+	pass := encoder.BeginComputePass(&wgpu.ComputePassDescriptor{})
+	pass.SetPipeline(pipeline)
+	pass.SetBindGroup(0, bindGroup, nil)
+	pass.DispatchWorkgroups((ProceduralCubemapSize+15)/16, (ProceduralCubemapSize+15)/16, 6)
+	pass.End()
+	pass.Release()
+
+	cmd, err := encoder.Finish(nil)
+	if err != nil {
+		encoder.Release()
+		return fmt.Errorf("ibl: equirect encoder finish: %w", err)
+	}
+	encoder.Release()
+	defer cmd.Release()
+	queue.Submit(cmd)
+
+	return nil
 }
 
 func generateBrdfLut(ibl *IBL, device *wgpu.Device, queue *wgpu.Queue) error {
@@ -639,69 +863,75 @@ func filterEnvironmentMap(ibl *IBL, device *wgpu.Device, queue *wgpu.Queue) erro
 		return fmt.Errorf("ibl: filter sampler: %w", err)
 	}
 	defer filterSampler.Release()
-	irradiance, err := device.CreateTexture(&wgpu.TextureDescriptor{
-		Label: "ibl irradiance",
-		Size: wgpu.Extent3D{
-			Width:              IrradianceSize,
-			Height:             IrradianceSize,
-			DepthOrArrayLayers: 6,
-		},
-		MipLevelCount: 1,
-		SampleCount:   1,
-		Dimension:     wgpu.TextureDimension2D,
-		Format:        wgpu.TextureFormatRGBA16Float,
-		Usage:         wgpu.TextureUsageTextureBinding | wgpu.TextureUsageStorageBinding,
-	})
-	if err != nil {
-		return fmt.Errorf("ibl: irradiance texture: %w", err)
-	}
-	ibl.Irradiance = irradiance
+	if ibl.Irradiance == nil {
+		irradiance, err := device.CreateTexture(&wgpu.TextureDescriptor{
+			Label: "ibl irradiance",
+			Size: wgpu.Extent3D{
+				Width:              IrradianceSize,
+				Height:             IrradianceSize,
+				DepthOrArrayLayers: 6,
+			},
+			MipLevelCount: 1,
+			SampleCount:   1,
+			Dimension:     wgpu.TextureDimension2D,
+			Format:        wgpu.TextureFormatRGBA16Float,
+			Usage:         wgpu.TextureUsageTextureBinding | wgpu.TextureUsageStorageBinding,
+		})
+		if err != nil {
+			return fmt.Errorf("ibl: irradiance texture: %w", err)
+		}
+		ibl.Irradiance = irradiance
 
-	irradianceCube, err := irradiance.CreateView(&wgpu.TextureViewDescriptor{
-		Label:           "ibl irradiance cube view",
-		Dimension:       wgpu.TextureViewDimensionCube,
-		BaseMipLevel:    0,
-		MipLevelCount:   1,
-		BaseArrayLayer:  0,
-		ArrayLayerCount: 6,
-		Aspect:          wgpu.TextureAspectAll,
-	})
-	if err != nil {
-		return fmt.Errorf("ibl: irradiance cube view: %w", err)
+		irradianceCube, err := irradiance.CreateView(&wgpu.TextureViewDescriptor{
+			Label:           "ibl irradiance cube view",
+			Dimension:       wgpu.TextureViewDimensionCube,
+			BaseMipLevel:    0,
+			MipLevelCount:   1,
+			BaseArrayLayer:  0,
+			ArrayLayerCount: 6,
+			Aspect:          wgpu.TextureAspectAll,
+		})
+		if err != nil {
+			return fmt.Errorf("ibl: irradiance cube view: %w", err)
+		}
+		ibl.IrradianceView = irradianceCube
 	}
-	ibl.IrradianceView = irradianceCube
+	irradiance := ibl.Irradiance
 
-	prefiltered, err := device.CreateTexture(&wgpu.TextureDescriptor{
-		Label: "ibl prefiltered",
-		Size: wgpu.Extent3D{
-			Width:              PrefilteredSize,
-			Height:             PrefilteredSize,
-			DepthOrArrayLayers: 6,
-		},
-		MipLevelCount: PrefilteredMipLevels,
-		SampleCount:   1,
-		Dimension:     wgpu.TextureDimension2D,
-		Format:        wgpu.TextureFormatRGBA16Float,
-		Usage:         wgpu.TextureUsageTextureBinding | wgpu.TextureUsageStorageBinding,
-	})
-	if err != nil {
-		return fmt.Errorf("ibl: prefiltered texture: %w", err)
-	}
-	ibl.Prefiltered = prefiltered
+	if ibl.Prefiltered == nil {
+		prefiltered, err := device.CreateTexture(&wgpu.TextureDescriptor{
+			Label: "ibl prefiltered",
+			Size: wgpu.Extent3D{
+				Width:              PrefilteredSize,
+				Height:             PrefilteredSize,
+				DepthOrArrayLayers: 6,
+			},
+			MipLevelCount: PrefilteredMipLevels,
+			SampleCount:   1,
+			Dimension:     wgpu.TextureDimension2D,
+			Format:        wgpu.TextureFormatRGBA16Float,
+			Usage:         wgpu.TextureUsageTextureBinding | wgpu.TextureUsageStorageBinding,
+		})
+		if err != nil {
+			return fmt.Errorf("ibl: prefiltered texture: %w", err)
+		}
+		ibl.Prefiltered = prefiltered
 
-	prefilteredCube, err := prefiltered.CreateView(&wgpu.TextureViewDescriptor{
-		Label:           "ibl prefiltered cube view",
-		Dimension:       wgpu.TextureViewDimensionCube,
-		BaseMipLevel:    0,
-		MipLevelCount:   PrefilteredMipLevels,
-		BaseArrayLayer:  0,
-		ArrayLayerCount: 6,
-		Aspect:          wgpu.TextureAspectAll,
-	})
-	if err != nil {
-		return fmt.Errorf("ibl: prefiltered cube view: %w", err)
+		prefilteredCube, err := prefiltered.CreateView(&wgpu.TextureViewDescriptor{
+			Label:           "ibl prefiltered cube view",
+			Dimension:       wgpu.TextureViewDimensionCube,
+			BaseMipLevel:    0,
+			MipLevelCount:   PrefilteredMipLevels,
+			BaseArrayLayer:  0,
+			ArrayLayerCount: 6,
+			Aspect:          wgpu.TextureAspectAll,
+		})
+		if err != nil {
+			return fmt.Errorf("ibl: prefiltered cube view: %w", err)
+		}
+		ibl.PrefilteredView = prefilteredCube
 	}
-	ibl.PrefilteredView = prefilteredCube
+	prefiltered := ibl.Prefiltered
 
 	layout, err := device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
 		Label: "filter envmap bgl",

@@ -7,8 +7,8 @@ import (
 	"github.com/matthewjberger/indigo/render/asset"
 )
 
-func AddSkyPass(renderer *render.Renderer) (*render.Pass, error) {
-	pass, err := NewSkyPass(renderer.Device, render.HdrFormat, renderer.AspectRatio)
+func AddSkyPass(renderer *render.Renderer, ibl *IBL) (*render.Pass, error) {
+	pass, err := NewSkyPass(renderer.Device, render.HdrFormat, renderer.AspectRatio, ibl)
 	if err != nil {
 		return nil, err
 	}
