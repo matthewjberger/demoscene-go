@@ -11,7 +11,7 @@ Archetype ECS, a wgpu-backed render graph with clustered lighting and image-base
 
 The editor ships in this repository as the end-to-end consumer.
 
-[![indigo editor](docs/editor.png)](https://matthewberger.dev/indigo/editor/)
+[![indigo editor](docs/editor.png)](https://matthewberger.dev/indigo/)
 
 [Editor in the browser](https://matthewberger.dev/indigo/editor/) (WebGPU required).
 
