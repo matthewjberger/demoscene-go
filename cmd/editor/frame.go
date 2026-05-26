@@ -11,7 +11,7 @@ import (
 func updateEditorFrame(worlds app.Worlds, renderer *render.Renderer, demo *app.App, delta float32) bool {
 	drainKhronosPending(worlds, renderer)
 	drainPolyhavenPending(worlds, renderer)
-	drainPolyhavenSkyPending(worlds, renderer)
+	drainPolyhavenSkyPending(worlds)
 	ecs.MustResource[asset.LoadingQueueResource](worlds.Engine).Queue.Drain(renderer.Queue)
 	syncUiPointer(worlds)
 	ctx := newHudContext(worlds)

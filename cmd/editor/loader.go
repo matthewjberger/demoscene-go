@@ -49,21 +49,18 @@ func drainPolyhavenPending(worlds app.Worlds, renderer *render.Renderer) {
 	drainPendingModel(worlds, renderer, browser.TakePending(), "polyhaven")
 }
 
-func drainPolyhavenSkyPending(worlds app.Worlds, renderer *render.Renderer) {
+func drainPolyhavenSkyPending(worlds app.Worlds) {
 	sky := *ecs.MustResource[*PolyhavenSky](worlds.Engine)
 	pending := sky.TakePending()
 	if pending == nil {
 		return
 	}
-	ibl := ecs.MustResource[pass.IBLResource](worlds.Engine).IBL
-	if err := ibl.LoadEquirect(renderer.Device, renderer.Queue, pending.Pixels, uint32(pending.Width), uint32(pending.Height)); err != nil {
-		log.Printf("polyhaven hdri load failed: %v", err)
-		return
-	}
-	settings := ecs.MustResource[render.Graphics](worlds.Engine)
-	settings.HdriLoaded = true
-	settings.ShowSky = true
-	log.Printf("hdri loaded: %s (%dx%d)", pending.DisplayName, pending.Width, pending.Height)
+	render.QueueCommand(worlds.Engine, pass.LoadHdrSkybox{
+		DisplayName: pending.DisplayName,
+		Width:       uint32(pending.Width),
+		Height:      uint32(pending.Height),
+		Pixels:      pending.Pixels,
+	})
 }
 
 func drainPendingModel(worlds app.Worlds, renderer *render.Renderer, pending *PendingModel, source string) {
