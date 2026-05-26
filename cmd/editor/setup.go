@@ -99,6 +99,7 @@ func editorApp() *app.App {
 
 			var bloomMipView func() *wgpu.TextureView
 			var fxaaOutputID render.ResourceID
+			var dofOutputID render.ResourceID
 
 			steps := []struct {
 				name string
@@ -132,7 +133,12 @@ func editorApp() *app.App {
 					_, bloomMipView, err = pass.AddBloomPass(renderer)
 					return err
 				}},
-				{"postprocess", func() error { _, err := pass.AddPostProcessPass(renderer, bloomMipView); return err }},
+				{"dof", func() error {
+					var err error
+					_, dofOutputID, err = pass.AddDoFPass(renderer, renderer.AspectRatio)
+					return err
+				}},
+				{"postprocess", func() error { _, err := pass.AddPostProcessPass(renderer, dofOutputID, bloomMipView); return err }},
 				{"fxaa", func() error {
 					var err error
 					_, fxaaOutputID, err = pass.AddFxaaPass(renderer)

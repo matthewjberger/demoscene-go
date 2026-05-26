@@ -32,10 +32,21 @@ type Graphics struct {
 
 	Cull Cull
 
-	Ssr  Ssr
-	Ssgi Ssgi
+	Ssr          Ssr
+	Ssgi         Ssgi
+	DepthOfField DepthOfField
 
 	Lines DebugLines
+}
+
+type DepthOfField struct {
+	Enabled        bool
+	FocusDistance  float32
+	FocusRange     float32
+	MaxBlurRadius  float32
+	BokehThreshold float32
+	BokehIntensity float32
+	SampleCount    uint32
 }
 
 type Ssr struct {
@@ -118,6 +129,15 @@ func DefaultGraphics() Graphics {
 			Radius:    2.0,
 			Intensity: 1.0,
 			MaxSteps:  16,
+		},
+		DepthOfField: DepthOfField{
+			Enabled:        false,
+			FocusDistance:  10.0,
+			FocusRange:     5.0,
+			MaxBlurRadius:  8.0,
+			BokehThreshold: 0.8,
+			BokehIntensity: 1.0,
+			SampleCount:    16,
 		},
 		Lines: DebugLines{
 			NormalLength:       0.08,
