@@ -32,7 +32,8 @@ type Graphics struct {
 
 	Cull Cull
 
-	Ssr Ssr
+	Ssr  Ssr
+	Ssgi Ssgi
 
 	Lines DebugLines
 }
@@ -44,6 +45,13 @@ type Ssr struct {
 	MaxDistance float32
 	Stride      float32
 	Intensity   float32
+}
+
+type Ssgi struct {
+	Enabled   bool
+	Radius    float32
+	Intensity float32
+	MaxSteps  uint32
 }
 
 type Bloom struct {
@@ -104,6 +112,12 @@ func DefaultGraphics() Graphics {
 			MaxDistance: 50.0,
 			Stride:      1.0,
 			Intensity:   1.0,
+		},
+		Ssgi: Ssgi{
+			Enabled:   false,
+			Radius:    2.0,
+			Intensity: 1.0,
+			MaxSteps:  16,
 		},
 		Lines: DebugLines{
 			NormalLength:       0.08,
