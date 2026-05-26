@@ -2,6 +2,7 @@ struct GizmoLine {
     start_end: vec4<f32>,
     color: vec4<f32>,
     extra: vec4<f32>,
+    corners23: vec4<f32>,
 };
 
 struct Viewport {
@@ -42,7 +43,7 @@ fn vertex_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32)
             end + normal,
         );
         pixel = corners[vi];
-    } else {
+    } else if (kind < 1.5) {
 
         var corners = array<vec2<f32>, 6>(
             start + normal,
@@ -51,6 +52,21 @@ fn vertex_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32)
             end,
             end,
             end,
+        );
+        pixel = corners[vi];
+    } else {
+
+        let c0 = line.start_end.xy;
+        let c1 = line.start_end.zw;
+        let c2 = line.corners23.xy;
+        let c3 = line.corners23.zw;
+        var corners = array<vec2<f32>, 6>(
+            c0,
+            c1,
+            c2,
+            c0,
+            c2,
+            c3,
         );
         pixel = corners[vi];
     }

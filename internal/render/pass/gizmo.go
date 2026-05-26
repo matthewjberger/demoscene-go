@@ -33,6 +33,85 @@ func AxisColor(axis uint8) [4]float32 {
 
 var AxisHoverColor = [4]float32{1.0, 0.85, 0.20, 1}
 
+const (
+	planeHandleInnerFraction float32 = 0.30
+	planeHandleOuterFraction float32 = 0.55
+)
+
+func PlaneColor(lockedAxis int) [4]float32 {
+	switch lockedAxis {
+	case 0:
+		return [4]float32{0.85, 0.30, 0.30, 0.45}
+	case 1:
+		return [4]float32{0.40, 0.85, 0.30, 0.45}
+	default:
+		return [4]float32{0.30, 0.55, 0.85, 0.45}
+	}
+}
+
+var PlaneHoverColor = [4]float32{1.0, 0.85, 0.20, 0.65}
+
+func PlaneAxisIndices(lockedAxis int) (int, int) {
+	switch lockedAxis {
+	case 0:
+		return 1, 2
+	case 1:
+		return 0, 2
+	default:
+		return 0, 1
+	}
+}
+
+func PlaneHandleWorldCorners(origin mgl32.Vec3, axes [3]mgl32.Vec3, lockedAxis int, worldLength float32) [4]mgl32.Vec3 {
+	aIndex, bIndex := PlaneAxisIndices(lockedAxis)
+	aDir := axes[aIndex]
+	bDir := axes[bIndex]
+	inner := worldLength * planeHandleInnerFraction
+	outer := worldLength * planeHandleOuterFraction
+	return [4]mgl32.Vec3{
+		origin.Add(aDir.Mul(inner)).Add(bDir.Mul(inner)),
+		origin.Add(aDir.Mul(outer)).Add(bDir.Mul(inner)),
+		origin.Add(aDir.Mul(outer)).Add(bDir.Mul(outer)),
+		origin.Add(aDir.Mul(inner)).Add(bDir.Mul(outer)),
+	}
+}
+
+func PlaneHandleScreenCorners(world [4]mgl32.Vec3, viewProj mgl32.Mat4, viewport [2]float32) ([4]mgl32.Vec2, bool) {
+	var corners [4]mgl32.Vec2
+	for index := 0; index < 4; index++ {
+		screen, ok := projectWorld(world[index], viewProj, viewport)
+		if !ok {
+			return corners, false
+		}
+		corners[index] = screen
+	}
+	return corners, true
+}
+
+func PointInQuad(point mgl32.Vec2, corners [4]mgl32.Vec2) bool {
+	var sign float32
+	for index := 0; index < 4; index++ {
+		from := corners[index]
+		to := corners[(index+1)%4]
+		edge := to.Sub(from)
+		toPoint := point.Sub(from)
+		cross := edge.X()*toPoint.Y() - edge.Y()*toPoint.X()
+		if math.Abs(float64(cross)) < 1e-4 {
+			continue
+		}
+		if sign == 0 {
+			if cross > 0 {
+				sign = 1
+			} else {
+				sign = -1
+			}
+		} else if sign*cross < 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func AxisDirection(axis uint8) mgl32.Vec3 {
 	switch axis {
 	case 0:

@@ -16,13 +16,14 @@ import (
 //go:embed gizmo.wgsl
 var gizmoShader string
 
-const gizmoLineInstanceBytes = uint64(48)
+const gizmoLineInstanceBytes = uint64(64)
 const gizmoMinCapacity uint32 = 64
 
 type gizmoLineInstance struct {
-	StartEnd [4]float32
-	Color    [4]float32
-	Extra    [4]float32
+	StartEnd  [4]float32
+	Color     [4]float32
+	Extra     [4]float32
+	Corners23 [4]float32
 }
 
 type gizmoPassState struct {
@@ -199,6 +200,22 @@ func gizmoPrepare(state *gizmoPassState, context *render.PassContext) error {
 			}
 		}
 	} else {
+		if gizmo.Mode == render.GizmoTranslate {
+			for lockedAxis := 0; lockedAxis < 3; lockedAxis++ {
+				worldCorners := PlaneHandleWorldCorners(origin, axes, lockedAxis, worldLength)
+				screenCorners, cornersOK := PlaneHandleScreenCorners(worldCorners, viewProj, viewport)
+				if !cornersOK {
+					continue
+				}
+				color := PlaneColor(lockedAxis)
+				if gizmo.HoverPlane == lockedAxis || (gizmo.DraggingPlane && int(gizmo.DragPlaneAxis) == lockedAxis) {
+					color = PlaneHoverColor
+				}
+				state.scratch = append(state.scratch, makePlaneQuad(screenCorners, color))
+				border := [4]float32{color[0], color[1], color[2], 0.9}
+				state.scratch = append(state.scratch, makePlaneBorder(screenCorners, border)...)
+			}
+		}
 		for axis := 0; axis < 3; axis++ {
 			if !valid[axis] {
 				continue
@@ -329,6 +346,30 @@ func ensureGizmoCapacity(state *gizmoPassState, device *wgpu.Device, required ui
 	state.bindGroup = bindGroup
 	state.capacity = newCapacity
 	return nil
+}
+
+func makePlaneQuad(corners [4]mgl32.Vec2, color [4]float32) gizmoLineInstance {
+	return gizmoLineInstance{
+		StartEnd:  [4]float32{corners[0].X(), corners[0].Y(), corners[1].X(), corners[1].Y()},
+		Color:     color,
+		Extra:     [4]float32{0, 2, 0, 0},
+		Corners23: [4]float32{corners[2].X(), corners[2].Y(), corners[3].X(), corners[3].Y()},
+	}
+}
+
+func makePlaneBorder(corners [4]mgl32.Vec2, color [4]float32) []gizmoLineInstance {
+	const borderThickness float32 = 1.5
+	out := make([]gizmoLineInstance, 0, 4)
+	for index := 0; index < 4; index++ {
+		a := corners[index]
+		b := corners[(index+1)%4]
+		out = append(out, gizmoLineInstance{
+			StartEnd: [4]float32{a.X(), a.Y(), b.X(), b.Y()},
+			Color:    color,
+			Extra:    [4]float32{borderThickness, 0, 0, 0},
+		})
+	}
+	return out
 }
 
 func makeTipSquare(at mgl32.Vec2, color [4]float32, side float32) gizmoLineInstance {

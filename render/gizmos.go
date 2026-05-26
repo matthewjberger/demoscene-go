@@ -14,7 +14,8 @@ const (
 type Gizmos struct {
 	Mode GizmoMode
 
-	HoverAxis int
+	HoverAxis  int
+	HoverPlane int
 
 	Dragging bool
 	DragAxis uint8
@@ -27,9 +28,15 @@ type Gizmos struct {
 	InitialT            float32
 	StartWorldVector    [3]float32
 
+	DraggingPlane     bool
+	DragPlaneAxis     uint8
+	PlaneInitialTrans [3]float32
+	PlaneNormalWorld  [3]float32
+	PlaneInitialHit   [3]float32
+
 	PrevLeftDown bool
 }
 
 func NewGizmos() *Gizmos {
-	return &Gizmos{Mode: GizmoTranslate, HoverAxis: -1}
+	return &Gizmos{Mode: GizmoTranslate, HoverAxis: -1, HoverPlane: -1}
 }

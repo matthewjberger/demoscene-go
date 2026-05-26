@@ -28,20 +28,25 @@ func UpdateGizmos(world *ecs.World) {
 
 	if gizmo.Mode == render.GizmoNone {
 		gizmo.HoverAxis = -1
+		gizmo.HoverPlane = -1
 		gizmo.Dragging = false
+		gizmo.DraggingPlane = false
 		return
 	}
 
 	target, ok := SelectedTarget(world)
 	if !ok {
 		gizmo.HoverAxis = -1
+		gizmo.HoverPlane = -1
 		gizmo.Dragging = false
+		gizmo.DraggingPlane = false
 		return
 	}
 
 	global, ok := ecs.Get[transform.GlobalTransform](world, target)
 	if !ok {
 		gizmo.HoverAxis = -1
+		gizmo.HoverPlane = -1
 		return
 	}
 	origin := mgl32.Vec3{
@@ -68,73 +73,129 @@ func UpdateGizmos(world *ecs.World) {
 
 	mousePos := mgl32.Vec2{input.MousePosition[0], input.MousePosition[1]}
 	hoverAxis := -1
-	bestDist := gizmoAxisHitThresholdPx
-	if gizmo.Mode == render.GizmoRotate {
-		for i := 0; i < 3; i++ {
-			points, validPts := RingScreenPoints(origin, axes[i], worldLength, viewProj, viewport)
-			for sample := 0; sample < RingSegmentCount; sample++ {
-				if !validPts[sample] || !validPts[sample+1] {
+	hoverPlane := -1
+	if !gizmo.Dragging && !gizmo.DraggingPlane {
+		if gizmo.Mode == render.GizmoTranslate {
+			bestPlaneDist := float32(math.MaxFloat32)
+			for lockedAxis := 0; lockedAxis < 3; lockedAxis++ {
+				worldCorners := PlaneHandleWorldCorners(origin, axes, lockedAxis, worldLength)
+				screenCorners, cornersOK := PlaneHandleScreenCorners(worldCorners, viewProj, viewport)
+				if !cornersOK || !PointInQuad(mousePos, screenCorners) {
 					continue
 				}
-				dist := DistanceToSegment(mousePos, points[sample], points[sample+1])
-				if dist < bestDist {
-					bestDist = dist
-					hoverAxis = i
+				centroid := screenCorners[0].Add(screenCorners[1]).Add(screenCorners[2]).Add(screenCorners[3]).Mul(0.25)
+				dist := mousePos.Sub(centroid).Len()
+				if dist < bestPlaneDist {
+					bestPlaneDist = dist
+					hoverPlane = lockedAxis
 				}
 			}
 		}
-	} else {
-		for i := 0; i < 3; i++ {
-			if !valid[i] {
-				continue
-			}
-			dist := DistanceToSegment(mousePos, originScreen, ends[i])
-			if dist < bestDist {
-				bestDist = dist
-				hoverAxis = i
+		if hoverPlane < 0 {
+			bestDist := gizmoAxisHitThresholdPx
+			if gizmo.Mode == render.GizmoRotate {
+				for i := 0; i < 3; i++ {
+					points, validPts := RingScreenPoints(origin, axes[i], worldLength, viewProj, viewport)
+					for sample := 0; sample < RingSegmentCount; sample++ {
+						if !validPts[sample] || !validPts[sample+1] {
+							continue
+						}
+						dist := DistanceToSegment(mousePos, points[sample], points[sample+1])
+						if dist < bestDist {
+							bestDist = dist
+							hoverAxis = i
+						}
+					}
+				}
+			} else {
+				for i := 0; i < 3; i++ {
+					if !valid[i] {
+						continue
+					}
+					dist := DistanceToSegment(mousePos, originScreen, ends[i])
+					if dist < bestDist {
+						bestDist = dist
+						hoverAxis = i
+					}
+				}
 			}
 		}
 	}
 	gizmo.HoverAxis = hoverAxis
+	gizmo.HoverPlane = hoverPlane
 
-	if leftJustDown && hoverAxis >= 0 && !gizmo.Dragging {
-		local, ok := ecs.Get[transform.LocalTransform](world, target)
-		if ok && valid[hoverAxis] {
-			axisDir := axes[hoverAxis]
-			started := false
-			initialT := float32(0)
-			startVec := mgl32.Vec3{}
-
-			if gizmo.Mode == render.GizmoRotate {
-				rayOrigin, rayDir := MouseRay(input.MousePosition[0], input.MousePosition[1], viewProj, viewport)
-				if hit, ok := RayPlaneIntersect(rayOrigin, rayDir, origin, axisDir); ok {
-					sv := ProjectOntoPlane(hit.Sub(origin), axisDir)
-					if sv.Len() > 1e-3 {
-						startVec = sv.Normalize()
-						started = true
-					}
-				}
-			} else {
-				initialT = ParametricTOnSegment(mousePos, originScreen, ends[hoverAxis])
-				started = true
+	if leftJustDown && !gizmo.Dragging && !gizmo.DraggingPlane {
+		if hoverPlane >= 0 {
+			normal := axes[hoverPlane]
+			rayOrigin, rayDir := MouseRay(input.MousePosition[0], input.MousePosition[1], viewProj, viewport)
+			if hit, ok := RayPlaneIntersect(rayOrigin, rayDir, origin, normal); ok {
+				gizmo.DraggingPlane = true
+				gizmo.DragPlaneAxis = uint8(hoverPlane)
+				gizmo.PlaneInitialTrans = [3]float32{origin.X(), origin.Y(), origin.Z()}
+				gizmo.PlaneNormalWorld = [3]float32{normal.X(), normal.Y(), normal.Z()}
+				gizmo.PlaneInitialHit = [3]float32{hit.X(), hit.Y(), hit.Z()}
 			}
+		} else if hoverAxis >= 0 {
+			local, ok := ecs.Get[transform.LocalTransform](world, target)
+			if ok && valid[hoverAxis] {
+				axisDir := axes[hoverAxis]
+				started := false
+				initialT := float32(0)
+				startVec := mgl32.Vec3{}
 
-			if started {
-				gizmo.Dragging = true
-				gizmo.DragAxis = uint8(hoverAxis)
-				gizmo.DragMode = gizmo.Mode
-				gizmo.StartLocal = *local
-				gizmo.StartGlobalTrans = [3]float32{origin.X(), origin.Y(), origin.Z()}
-				gizmo.AxisWorldDirection = [3]float32{axisDir.X(), axisDir.Y(), axisDir.Z()}
-				gizmo.AxisWorldLengthDrag = worldLength
-				gizmo.InitialT = initialT
-				gizmo.StartWorldVector = [3]float32{startVec.X(), startVec.Y(), startVec.Z()}
+				if gizmo.Mode == render.GizmoRotate {
+					rayOrigin, rayDir := MouseRay(input.MousePosition[0], input.MousePosition[1], viewProj, viewport)
+					if hit, ok := RayPlaneIntersect(rayOrigin, rayDir, origin, axisDir); ok {
+						sv := ProjectOntoPlane(hit.Sub(origin), axisDir)
+						if sv.Len() > 1e-3 {
+							startVec = sv.Normalize()
+							started = true
+						}
+					}
+				} else {
+					initialT = ParametricTOnSegment(mousePos, originScreen, ends[hoverAxis])
+					started = true
+				}
+
+				if started {
+					gizmo.Dragging = true
+					gizmo.DragAxis = uint8(hoverAxis)
+					gizmo.DragMode = gizmo.Mode
+					gizmo.StartLocal = *local
+					gizmo.StartGlobalTrans = [3]float32{origin.X(), origin.Y(), origin.Z()}
+					gizmo.AxisWorldDirection = [3]float32{axisDir.X(), axisDir.Y(), axisDir.Z()}
+					gizmo.AxisWorldLengthDrag = worldLength
+					gizmo.InitialT = initialT
+					gizmo.StartWorldVector = [3]float32{startVec.X(), startVec.Y(), startVec.Z()}
+				}
 			}
 		}
 	}
 
 	if leftJustUp {
 		gizmo.Dragging = false
+		gizmo.DraggingPlane = false
+	}
+
+	if gizmo.DraggingPlane {
+		if !leftDown {
+			gizmo.DraggingPlane = false
+			return
+		}
+		normal := mgl32.Vec3{gizmo.PlaneNormalWorld[0], gizmo.PlaneNormalWorld[1], gizmo.PlaneNormalWorld[2]}
+		initialHit := mgl32.Vec3{gizmo.PlaneInitialHit[0], gizmo.PlaneInitialHit[1], gizmo.PlaneInitialHit[2]}
+		initialTrans := mgl32.Vec3{gizmo.PlaneInitialTrans[0], gizmo.PlaneInitialTrans[1], gizmo.PlaneInitialTrans[2]}
+		rayOrigin, rayDir := MouseRay(input.MousePosition[0], input.MousePosition[1], viewProj, viewport)
+		hit, ok := RayPlaneIntersect(rayOrigin, rayDir, initialTrans, normal)
+		if !ok {
+			return
+		}
+		newWorld := initialTrans.Add(hit.Sub(initialHit))
+		newLocal := worldToLocalTranslation(world, target, newWorld)
+		applyLocalGizmo(world, target, func(t *transform.LocalTransform) {
+			t.Translation = newLocal
+		})
+		return
 	}
 
 	if !gizmo.Dragging {
