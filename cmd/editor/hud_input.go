@@ -194,6 +194,9 @@ func handleUiClicks(worlds app.Worlds) {
 		case hud.RandomModelButton:
 			(*ecs.MustResource[*PolyhavenBrowser](worlds.Engine)).FetchRandom()
 			hud.OpenMenu = menuClosed
+		case hud.RandomSkyButton:
+			(*ecs.MustResource[*PolyhavenSky](worlds.Engine)).FetchRandom()
+			hud.OpenMenu = menuClosed
 		case hud.ViewerButton:
 			settings := ecs.MustResource[render.Graphics](worlds.Engine)
 			settings.ViewerMode = !settings.ViewerMode

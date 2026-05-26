@@ -11,6 +11,7 @@ import (
 
 	"github.com/matthewjberger/indigo/app"
 	"github.com/matthewjberger/indigo/ecs"
+	"github.com/matthewjberger/indigo/internal/render/pass"
 	"github.com/matthewjberger/indigo/render"
 	"github.com/matthewjberger/indigo/render/asset"
 	"github.com/matthewjberger/indigo/transform"
@@ -46,6 +47,23 @@ func drainKhronosPending(worlds app.Worlds, renderer *render.Renderer) {
 func drainPolyhavenPending(worlds app.Worlds, renderer *render.Renderer) {
 	browser := *ecs.MustResource[*PolyhavenBrowser](worlds.Engine)
 	drainPendingModel(worlds, renderer, browser.TakePending(), "polyhaven")
+}
+
+func drainPolyhavenSkyPending(worlds app.Worlds, renderer *render.Renderer) {
+	sky := *ecs.MustResource[*PolyhavenSky](worlds.Engine)
+	pending := sky.TakePending()
+	if pending == nil {
+		return
+	}
+	ibl := ecs.MustResource[pass.IBLResource](worlds.Engine).IBL
+	if err := ibl.LoadEquirect(renderer.Device, renderer.Queue, pending.Pixels, uint32(pending.Width), uint32(pending.Height)); err != nil {
+		log.Printf("polyhaven hdri load failed: %v", err)
+		return
+	}
+	settings := ecs.MustResource[render.Graphics](worlds.Engine)
+	settings.HdriLoaded = true
+	settings.ShowSky = true
+	log.Printf("hdri loaded: %s (%dx%d)", pending.DisplayName, pending.Width, pending.Height)
 }
 
 func drainPendingModel(worlds app.Worlds, renderer *render.Renderer, pending *PendingModel, source string) {

@@ -41,6 +41,7 @@ type HudHandles struct {
 	ViewButton        ecs.Entity
 	AssetsButton      ecs.Entity
 	RandomModelButton ecs.Entity
+	RandomSkyButton   ecs.Entity
 	ViewerButton      ecs.Entity
 	ViewerCheck       ecs.Entity
 	ViewerLabel       ecs.Entity
@@ -128,7 +129,9 @@ func buildHud(world *ecs.World) HudHandles {
 	h.EditButton = buildMenuButton(b, "EDIT")
 	h.ViewButton = buildMenuButton(b, "VIEW")
 	h.AssetsButton = buildMenuButton(b, "ASSETS")
-	h.RandomModelButton = buildBarButton(b, "RANDOM MODEL", 124)
+	buildBarLabel(b, "RANDOM:")
+	h.RandomModelButton = buildBarButton(b, "MODEL", 64)
+	h.RandomSkyButton = buildBarButton(b, "SKY", 48)
 	h.ViewerButton, h.ViewerCheck = buildCheckbox(b)
 	h.ViewerLabel = b.Node(ui.Node{Width: 70, Height: 24}).
 		Color(ui.Color{RGBA: [4]float32{0, 0, 0, 0}}).
@@ -301,6 +304,16 @@ func buildMenuPopup(b *ui.Builder, anchorX, anchorY float32, items []string) men
 
 func buildMenuButton(b *ui.Builder, text string) ecs.Entity {
 	return buildBarButton(b, text, 64)
+}
+
+func buildBarLabel(b *ui.Builder, text string) ecs.Entity {
+	return b.Node(ui.Node{Width: 64, Height: 24}).
+		Color(ui.Color{RGBA: [4]float32{0, 0, 0, 0}}).
+		Text(ui.Text{
+			Content: text,
+			Color:   [4]float32{0.85, 0.88, 0.94, 1},
+			Scale:   1.4,
+		}).Entity()
 }
 
 func buildBarButton(b *ui.Builder, text string, width float32) ecs.Entity {

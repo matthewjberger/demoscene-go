@@ -47,6 +47,7 @@ func buildWorlds(renderer *render.Renderer) (app.Worlds, *app.App) {
 	ecs.Register[Spinner](worlds.Game)
 	ecs.SetResource(engine, NewKhronosBrowser())
 	ecs.SetResource(engine, NewPolyhavenBrowser())
+	ecs.SetResource(engine, NewPolyhavenSky())
 	ecs.SetResource(engine, buildHud(worlds.UI))
 
 	worlds.EngineSchedule.Push("graphics_toggles", render.UpdateGraphicsToggles)
@@ -104,7 +105,7 @@ func editorApp() *app.App {
 				add  func() error
 			}{
 				{"skinning_compute", func() error { _, err := pass.AddSkinningComputePass(renderer, skinning); return err }},
-				{"sky", func() error { _, err := pass.AddSkyPass(renderer); return err }},
+				{"sky", func() error { _, err := pass.AddSkyPass(renderer, ibl); return err }},
 				{"shadow_depth", func() error { _, err := pass.AddShadowDepthPass(renderer, shadow); return err }},
 				{"spot_shadow", func() error { _, err := pass.AddSpotShadowPass(renderer, spotShadow); return err }},
 				{"point_shadow", func() error { _, err := pass.AddPointShadowPass(renderer, pointShadow); return err }},
